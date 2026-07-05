@@ -1,0 +1,44 @@
+# ── AI Meeting Assistant ──────────────────────────────────────────────────────
+# Python >= 3.10 recommended
+
+# ── Audio / Video acquisition ────────────────────────────────────────────────
+yt-dlp>=2024.4.9
+pydub>=0.25.1
+ffmpeg-python>=0.2.0
+
+# ── Speech-to-Text (Whisper) ─────────────────────────────────────────────────
+openai-whisper>=20231117
+torch>=2.2.0
+torchaudio>=2.2.0
+
+# ── Hinglish Transcription (Sarvam AI) ───────────────────────────────────────
+requests>=2.32.0
+
+# ── LangChain Core ───────────────────────────────────────────────────────────
+langchain>=0.2.0
+langchain-core>=0.2.0
+langchain-community>=0.2.0
+
+# ── Groq LLM ─────────────────────────────────────────────────────────────────
+langchain-groq>=0.1.5
+
+# ── RAG Pipeline ─────────────────────────────────────────────────────────────
+chromadb>=0.5.0
+sentence-transformers>=3.0.0
+langchain-huggingface>=0.0.3
+huggingface-hub>=0.23.0
+tiktoken>=0.7.0
+
+# ── Streamlit UI ─────────────────────────────────────────────────────────────
+streamlit>=1.35.0
+streamlit-extras>=0.4.0
+watchdog>=4.0.0
+
+# ── Export Utilities ─────────────────────────────────────────────────────────
+reportlab>=4.2.0
+fpdf2>=2.7.9
+
+# ── Utilities ────────────────────────────────────────────────────────────────
+python-dotenv>=1.0.0
+numpy>=1.26.0
+tqdm>=4.66.0
