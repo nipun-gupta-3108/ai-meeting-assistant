@@ -8,3 +8,5 @@ uploads/
 vector_db/
 
 .venv/
+
+.streamlit/secrets.toml

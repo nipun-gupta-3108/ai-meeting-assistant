@@ -1,3 +1,15 @@
+import sys
+
+# Streamlit Community Cloud ships an old system SQLite (<3.35), which
+# ChromaDB requires at a minimum. This swaps in pysqlite3-binary's modern
+# build. Must run before chromadb (or anything importing it) is loaded.
+try:
+    __import__("pysqlite3")
+    sys.modules["sqlite3"] = sys.modules["pysqlite3"]
+except ImportError:
+    pass
+
+
 from pathlib import Path
 
 import streamlit as st

@@ -27,6 +27,7 @@ langchain-groq>=0.1.5
 # ── RAG Pipeline ─────────────────────────────────────────────────────────────
 chromadb>=0.5.0
 sentence-transformers>=3.0.0
+pysqlite3-binary>=0.5.0
 langchain-huggingface>=0.0.3
 huggingface-hub>=0.23.0
 
