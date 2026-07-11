@@ -339,10 +339,15 @@ def run_analysis(input_mode: str, source: str, uploaded_file, language: str):
         return
 
     st.session_state.chat_history = []
-    with st.spinner("Processing media, transcribing audio, and building meeting intelligence..."):
-        st.session_state.result = run_meeting_assistant_pipeline(source.strip(), language)
-        st.session_state.last_source = source
+    try:
+        with st.spinner("Processing media, transcribing audio, and building meeting intelligence..."):
+            result = run_meeting_assistant_pipeline(source.strip(), language)
+    except Exception as exc:
+        st.error(f"Analysis failed: {exc}")
+        return
 
+    st.session_state.result = result
+    st.session_state.last_source = source
     st.success("Analysis complete.")
 
 
