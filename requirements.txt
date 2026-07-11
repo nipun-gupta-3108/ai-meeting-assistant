@@ -11,6 +11,7 @@ pydub>=0.25.1
 openai-whisper>=20231117
 torch>=2.2.0
 torchaudio>=2.2.0
+torchvision>=0.17.2
 
 # ── Hinglish Transcription (Sarvam AI) ───────────────────────────────────────
 requests>=2.32.0
