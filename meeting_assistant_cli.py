@@ -31,8 +31,3 @@ if __name__ == "__main__":
             continue
         answer = ask_transcript_question(rag_chain, question)
         print(f"\nAssistant: {answer}\n")
-
-
-
-
-
