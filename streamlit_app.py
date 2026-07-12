@@ -16,7 +16,7 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from core.transcript_qa import ask_transcript_question
-from meeting_assistant_cli import run_meeting_assistant_pipeline
+from core.pipeline import run_meeting_assistant_pipeline
 
 
 load_dotenv()
