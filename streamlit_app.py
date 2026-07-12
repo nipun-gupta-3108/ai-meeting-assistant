@@ -164,19 +164,23 @@ def render_result_tabs(result: dict):
     )
 
     with summary_tab:
-        st.subheader(result["title"])
-        st.markdown(result["summary"])
+        with st.container(border=True):
+            st.subheader(result["title"])
+            st.markdown(result["summary"])
 
     with insights_tab:
         col1, col2 = st.columns(2)
         with col1:
-            st.markdown("#### Action Items")
-            st.markdown(result["action_items"])
+            with st.container(border=True):
+                st.markdown("#### Action Items")
+                st.markdown(result["action_items"])
         with col2:
-            st.markdown("#### Key Decisions")
-            st.markdown(result["key_decisions"])
-        st.markdown("#### Open Questions")
-        st.markdown(result["open_questions"])
+            with st.container(border=True):
+                st.markdown("#### Key Decisions")
+                st.markdown(result["key_decisions"])
+        with st.container(border=True):
+            st.markdown("#### Open Questions")
+            st.markdown(result["open_questions"])
 
     with transcript_tab:
         st.text_area("Full transcript", result["transcript"], height=420)

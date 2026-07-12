@@ -1,4 +1,4 @@
-import whisper
+from faster_whisper import WhisperModel
 import os
 import torch
 import requests
@@ -10,7 +10,7 @@ import streamlit as st
 SARVAM_PIECE_SECONDS = 25
 
 
-WHISPER_MODEL = os.getenv("WHISPER_MODEL", "small")
+WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base")
 
 
 SARVAM_API_KEY = os.getenv("SARVAM_API_KEY")
@@ -22,26 +22,50 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 @st.cache_resource
 def load_whisper_model():
-    print(f"Loading Whisper model: {WHISPER_MODEL} ...")
-    model = whisper.load_model(WHISPER_MODEL, device=device)
-    print("Whisper model loaded.")
+    compute_type = "float16" if device == "cuda" else "int8"
+
+    print(f"Loading Faster-Whisper ({WHISPER_MODEL}) on {device} ({compute_type})...")
+
+    model = WhisperModel(
+        WHISPER_MODEL,
+        device=device,
+        compute_type=compute_type,
+    )
+
+    print("Faster-Whisper model loaded.")
+
     return model
 
 
 def transcribe_audio_chunk_with_whisper(chunk_path: str) -> str:
     model = load_whisper_model()
 
-    result = model.transcribe(chunk_path, task="transcribe")
-    return result["text"]
+    segments, info = model.transcribe(
+        chunk_path,
+        beam_size=1,
+        vad_filter=True,
+    )
+
+    text = " ".join(segment.text for segment in segments)
+
+    return text
 
 
 def _send_audio_piece_to_sarvam(piece_path: str) -> str:
-    """Send one ≤30s WAV file to Sarvam and return the English transcript."""
+    print("=" * 60)
+    print("Sending to Sarvam:", piece_path)
+
     headers = {"api-subscription-key": SARVAM_API_KEY}
 
     with open(piece_path, "rb") as f:
         files = {"file": (os.path.basename(piece_path), f, "audio/wav")}
-        data = {"model": SARVAM_MODEL, "with_diarization": "false"}
+        data = {
+            "model": SARVAM_MODEL,
+            "with_diarization": "false",
+        }
+
+        print("Making POST request...")
+
         response = requests.post(
             SARVAM_STT_TRANSLATE_URL,
             headers=headers,
@@ -50,12 +74,7 @@ def _send_audio_piece_to_sarvam(piece_path: str) -> str:
             timeout=120,
         )
 
-    if not response.ok:
-        print(f"\n❌ Sarvam returned {response.status_code}")
-        print(f"Response body: {response.text}\n")
-        response.raise_for_status()
-
-    return response.json().get("transcript", "")
+    print("Response received:", response.status_code)
 
 
 def transcribe_audio_chunk_with_sarvam(chunk_path: str) -> str:
@@ -72,10 +91,14 @@ def transcribe_audio_chunk_with_sarvam(chunk_path: str) -> str:
     full_text = ""
     total_pieces = (len(audio) + piece_ms - 1) // piece_ms
 
+    print(f"Chunk duration: {len(audio)/1000:.1f} sec")
+
     for i, start in enumerate(range(0, len(audio), piece_ms)):
+        print(f"Creating piece {i+1}/{total_pieces}")
         piece = audio[start : start + piece_ms]
         piece_path = f"{chunk_path}_sv_{i}.wav"
         piece.export(piece_path, format="wav")
+        print("Exported:", piece_path)
 
         try:
             print(f"  → Sarvam piece {i + 1}/{total_pieces} ...")
