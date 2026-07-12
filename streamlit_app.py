@@ -21,8 +21,12 @@ from meeting_assistant_cli import run_meeting_assistant_pipeline
 
 load_dotenv()
 
+APP_NAME = "AI Meeting Assistant"
+
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
+
+STYLE_PATH = Path(__file__).parent / "assets" / "style.css"
 
 
 def save_uploaded_file(uploaded_file) -> str:
@@ -56,133 +60,30 @@ def initialize_state():
 
 
 def render_styles():
+    """Load the external stylesheet and inject it into the page."""
+    css = STYLE_PATH.read_text(encoding="utf-8")
+    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
+
+
+def render_metric_row(items: list[tuple[str, str]]):
+    """Render a row of metric cards, e.g. [("Title", "Standup"), ...]."""
+    cards = "".join(
+        f'<div class="metric-card"><span>{label}</span><strong>{value}</strong></div>'
+        for label, value in items
+    )
+    st.markdown(f'<div class="metric-row">{cards}</div>', unsafe_allow_html=True)
+
+
+def render_section_card(title: str, body: str):
+    """Render a single titled info card used on the empty-state screen."""
     st.markdown(
-        """
-        <style>
-        .stApp {
-            background: #0f172a;
-            color: #e5e7eb;
-        }
-
-        [data-testid="stSidebar"] {
-            background: #111827;
-            border-right: 1px solid rgba(148, 163, 184, 0.18);
-        }
-
-        .main .block-container {
-            max-width: 1180px;
-            padding-top: 2rem;
-            padding-bottom: 3rem;
-        }
-
-        .hero {
-            border: 1px solid rgba(148, 163, 184, 0.22);
-            background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.94));
-            padding: 28px;
-            border-radius: 8px;
-            margin-bottom: 22px;
-        }
-
-        .eyebrow {
-            color: #67e8f9;
-            font-size: 0.78rem;
-            font-weight: 700;
-            letter-spacing: 0.16em;
-            text-transform: uppercase;
-            margin-bottom: 10px;
-        }
-
-        .hero h1 {
-            color: #f8fafc;
-            font-size: 3rem;
-            line-height: 1.08;
-            margin: 0 0 12px;
-        }
-
-        .hero p {
-            color: #cbd5e1;
-            font-size: 1.04rem;
-            margin: 0;
-            max-width: 760px;
-        }
-
-        .metric-row {
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 12px;
-            margin-bottom: 20px;
-        }
-
-        .metric-card {
-            border: 1px solid rgba(148, 163, 184, 0.22);
-            background: #1e293b;
-            border-radius: 8px;
-            padding: 16px;
-        }
-
-        .metric-card span {
-            color: #94a3b8;
-            display: block;
-            font-size: 0.8rem;
-            margin-bottom: 6px;
-        }
-
-        .metric-card strong {
-            color: #f8fafc;
-            font-size: 1.45rem;
-        }
-
-        .section-card {
-            border: 1px solid rgba(148, 163, 184, 0.22);
-            background: #1e293b;
-            border-radius: 8px;
-            padding: 18px;
-            min-height: 180px;
-        }
-
-        .section-card h3 {
-            color: #f8fafc;
-            margin-top: 0;
-        }
-
-        div[data-testid="stMarkdownContainer"] p,
-        div[data-testid="stMarkdownContainer"] li {
-            color: #dbe4f0;
-        }
-
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 8px;
-        }
-
-        .stTabs [data-baseweb="tab"] {
-            background: #1e293b;
-            border-radius: 8px;
-            color: #cbd5e1;
-            border: 1px solid rgba(148, 163, 184, 0.18);
-        }
-
-        .stTabs [aria-selected="true"] {
-            background: #0e7490;
-            color: #ffffff;
-        }
-
-        @media (max-width: 760px) {
-            .hero h1 {
-                font-size: 2.15rem;
-            }
-
-            .metric-row {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
-        }
-        </style>
-        """,
+        f'<div class="section-card"><h3>{title}</h3><p>{body}</p></div>',
         unsafe_allow_html=True,
     )
 
 
 def render_sidebar():
-    st.sidebar.title("AI Video Assistant")
+    st.sidebar.title(APP_NAME)
     st.sidebar.caption("Transcribe, summarize, extract decisions, and chat with a meeting.")
 
     input_mode = st.sidebar.radio("Input type", ["YouTube URL", "Upload file"])
@@ -210,10 +111,10 @@ def render_sidebar():
 
 def render_hero():
     st.markdown(
-        """
+        f"""
         <div class="hero">
             <div class="eyebrow">Meeting Intelligence Workspace</div>
-            <h1>AI Video Assistant</h1>
+            <h1>{APP_NAME}</h1>
             <p>Turn YouTube videos or meeting recordings into transcripts, summaries, action items, decisions, and searchable Q&A.</p>
         </div>
         """,
@@ -222,54 +123,40 @@ def render_hero():
 
 
 def render_empty_state():
-    st.markdown(
-        """
-        <div class="metric-row">
-            <div class="metric-card"><span>Input</span><strong>URL or file</strong></div>
-            <div class="metric-card"><span>Transcription</span><strong>Whisper</strong></div>
-            <div class="metric-card"><span>Analysis</span><strong>Groq</strong></div>
-            <div class="metric-card"><span>Search</span><strong>ChromaDB</strong></div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_metric_row(
+        [
+            ("Input", "URL or file"),
+            ("Transcription", "Whisper"),
+            ("Analysis", "Groq"),
+            ("Search", "ChromaDB"),
+        ]
     )
 
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown(
-            """
-            <div class="section-card">
-                <h3>What it does</h3>
-                <p>Processes a video or audio source, creates a transcript, and extracts the meeting details people usually lose after the call.</p>
-            </div>
-            """,
-            unsafe_allow_html=True,
+        render_section_card(
+            "What it does",
+            "Processes a video or audio source, creates a transcript, and extracts "
+            "the meeting details people usually lose after the call.",
         )
     with col2:
-        st.markdown(
-            """
-            <div class="section-card">
-                <h3>How to start</h3>
-                <p>Choose an input type in the sidebar, select the language, then run the analysis. Results will appear here.</p>
-            </div>
-            """,
-            unsafe_allow_html=True,
+        render_section_card(
+            "How to start",
+            "Choose an input type in the sidebar, select the language, then run "
+            "the analysis. Results will appear here.",
         )
 
 
 def render_result_tabs(result: dict):
     export_text = build_text_export(result)
 
-    st.markdown(
-        f"""
-        <div class="metric-row">
-            <div class="metric-card"><span>Title</span><strong>{result['title']}</strong></div>
-            <div class="metric-card"><span>Transcript</span><strong>{len(result['transcript'].split())} words</strong></div>
-            <div class="metric-card"><span>Insights</span><strong>3 sections</strong></div>
-            <div class="metric-card"><span>Q&A</span><strong>Ready</strong></div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_metric_row(
+        [
+            ("Title", result["title"]),
+            ("Transcript", f"{len(result['transcript'].split())} words"),
+            ("Insights", "3 sections"),
+            ("Q&A", "Ready"),
+        ]
     )
 
     summary_tab, insights_tab, transcript_tab, chat_tab, export_tab = st.tabs(
@@ -343,17 +230,20 @@ def run_analysis(input_mode: str, source: str, uploaded_file, language: str):
         with st.spinner("Processing media, transcribing audio, and building meeting intelligence..."):
             result = run_meeting_assistant_pipeline(source.strip(), language)
     except Exception as exc:
-        st.error(f"Analysis failed: {exc}")
+        st.error(
+            f"Analysis failed: {exc}\n\nPlease check your input or API configuration and try again."
+        )
         return
 
     st.session_state.result = result
     st.session_state.last_source = source
+
     st.success("Analysis complete.")
 
 
 def main():
     st.set_page_config(
-        page_title="AI Video Assistant",
+        page_title=APP_NAME,
         page_icon="🎙️",
         layout="wide",
     )
