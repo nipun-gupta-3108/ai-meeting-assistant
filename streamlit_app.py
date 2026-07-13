@@ -15,11 +15,10 @@ from pathlib import Path
 import streamlit as st
 from dotenv import load_dotenv
 
+load_dotenv()
+
 from core.transcript_qa import ask_transcript_question
 from core.pipeline import run_meeting_assistant_pipeline
-
-
-load_dotenv()
 
 APP_NAME = "AI Meeting Assistant"
 

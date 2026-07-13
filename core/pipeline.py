@@ -2,9 +2,7 @@ from utils.audio_preparation import prepare_audio_chunks
 from core.audio_transcription import transcribe_audio_chunks
 from core.transcript_summary import summarize_transcript, generate_meeting_title
 from core.transcript_insights import (
-    extract_action_items_from_transcript,
-    extract_key_decisions_from_transcript,
-    extract_open_questions_from_transcript,
+    extract_meeting_insights_from_transcript,
 )
 from core.transcript_qa import build_transcript_rag_chain
 
@@ -21,10 +19,11 @@ def run_meeting_assistant_pipeline(source: str, language: str = "english") -> di
 
     summary = summarize_transcript(transcript)
 
-    action_item = extract_action_items_from_transcript(transcript)
+    insights = extract_meeting_insights_from_transcript(transcript)
 
-    decisions = extract_key_decisions_from_transcript(transcript)
-    questions = extract_open_questions_from_transcript(transcript)
+    action_item = insights["action_items"]
+    decisions = insights["key_decisions"]
+    questions = insights["open_questions"]
 
     rag_chain = build_transcript_rag_chain(transcript)
 

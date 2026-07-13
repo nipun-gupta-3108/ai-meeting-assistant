@@ -4,6 +4,7 @@ import torch
 import requests
 from pydub import AudioSegment
 import streamlit as st
+import time
 
 # Sarvam's sync STT-translate API rejects audio longer than 30s.
 # We slice each chunk into 25s pieces (with a 5s safety margin) before sending.
@@ -65,16 +66,35 @@ def _send_audio_piece_to_sarvam(piece_path: str) -> str:
         }
 
         print("Making POST request...")
+        start = time.time()
 
         response = requests.post(
             SARVAM_STT_TRANSLATE_URL,
             headers=headers,
             files=files,
             data=data,
-            timeout=120,
+            timeout=30,
         )
 
+        print("Finished in", time.time() - start, "seconds")
+        print(response.status_code)
+        print(response.text)
+
     print("Response received:", response.status_code)
+
+    response.raise_for_status()
+
+    data = response.json()
+
+    print("Response JSON:", data)
+
+    text = data.get("transcript")
+
+    if text is None:
+        print("⚠️ Transcript missing in response.")
+        return ""
+
+    return text
 
 
 def transcribe_audio_chunk_with_sarvam(chunk_path: str) -> str:
@@ -102,7 +122,12 @@ def transcribe_audio_chunk_with_sarvam(chunk_path: str) -> str:
 
         try:
             print(f"  → Sarvam piece {i + 1}/{total_pieces} ...")
-            full_text += _send_audio_piece_to_sarvam(piece_path) + " "
+            piece_text = _send_audio_piece_to_sarvam(piece_path)
+
+            print("Returned transcript:", repr(piece_text))
+
+            if piece_text:
+                full_text += piece_text + " "
         finally:
             if os.path.exists(piece_path):
                 os.remove(piece_path)

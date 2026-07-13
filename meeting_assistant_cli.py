@@ -1,9 +1,7 @@
 from dotenv import load_dotenv
+load_dotenv()
 from core.pipeline import run_meeting_assistant_pipeline
 from core.transcript_qa import ask_transcript_question
-
-load_dotenv()
-
 
 if __name__ == "__main__":
     # CLI entry point

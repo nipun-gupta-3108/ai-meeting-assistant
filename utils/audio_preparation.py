@@ -2,6 +2,7 @@ import os
 import yt_dlp
 from pydub import AudioSegment
 import shutil
+import subprocess
 
 ffmpeg_path = shutil.which("ffmpeg")
 
@@ -40,9 +41,28 @@ def convert_media_to_wav(input_path: str) -> str:
 
     output_path = os.path.splitext(input_path)[0] + "_converted.wav"
 
-    audio = AudioSegment.from_file(input_path)
-    audio = audio.set_channels(1).set_frame_rate(16000)
-    audio.export(output_path, format="wav")
+    command = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        input_path,
+        "-vn",
+        "-ac",
+        "1",
+        "-ar",
+        "16000",
+        output_path,
+    ]
+
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        print(result.stderr)
+        raise RuntimeError("FFmpeg conversion failed.")
 
     return output_path
 

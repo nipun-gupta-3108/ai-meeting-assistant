@@ -36,9 +36,17 @@ Numbered list of decisions made. If none, write "No key decisions found."
 Numbered list of unanswered questions, blockers, or follow-ups. If none, write "No open questions found."
 """
 
-# Built once at import time and reused for every meeting, instead of
-# rebuilding the prompt/chain on every call.
-INSIGHTS_CHAIN = build_extraction_chain(INSIGHTS_SYSTEM_PROMPT)
+# Built lazily on first use and cached, instead of at import time —
+# building at import time would require GROQ_API_KEY before
+# load_dotenv() runs in streamlit_app.py, causing a startup crash.
+_INSIGHTS_CHAIN = None
+
+
+def get_insights_chain():
+    global _INSIGHTS_CHAIN
+    if _INSIGHTS_CHAIN is None:
+        _INSIGHTS_CHAIN = build_extraction_chain(INSIGHTS_SYSTEM_PROMPT)
+    return _INSIGHTS_CHAIN
 
 # Fallback text used if a section header is missing or unparsable from the model's output
 _DEFAULTS = {
@@ -92,5 +100,5 @@ def parse_insight_sections(raw_text: str) -> dict:
 
 def extract_meeting_insights_from_transcript(transcript: str) -> dict:
     """Single Groq call returning action items, key decisions, and open questions."""
-    raw_output = INSIGHTS_CHAIN.invoke(transcript)
+    raw_output = get_insights_chain().invoke(transcript)
     return parse_insight_sections(raw_output)
