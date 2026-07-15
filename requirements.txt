@@ -2,7 +2,7 @@
 # Python >= 3.10 recommended
 
 # ── Audio / Video acquisition ────────────────────────────────────────────────
-yt-dlp>=2024.4.9
+yt-dlp>=2025.7.21
 pydub>=0.25.1
 # Note: pydub shells out to the ffmpeg binary directly, so FFmpeg must be
 # installed and on PATH — see README for install instructions.

@@ -23,8 +23,13 @@ def download_audio_from_youtube(url: str) -> str:
     output_path = os.path.join(DOWNLOAD_DIR, "%(id)s_%(title).80s.%(ext)s")
 
     ydl_opts = {
-        "format": "bestaudio/best",
+        "format": "bestaudio[ext=m4a]/bestaudio/best",
         "outtmpl": output_path,
+        "noplaylist": True,
+        "quiet": False,
+        "no_warnings": False,
+        "extractor_retries": 5,
+        "retries": 5,
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
