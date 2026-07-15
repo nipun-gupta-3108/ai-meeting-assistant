@@ -12,7 +12,7 @@ except ImportError:
 
 
 from pathlib import Path
-
+import traceback
 import streamlit as st
 from dotenv import load_dotenv
 
@@ -239,6 +239,7 @@ def run_analysis(input_mode: str, source: str, uploaded_file, language: str):
         with st.spinner("Processing media, transcribing audio, and building meeting intelligence..."):
             result = run_meeting_assistant_pipeline(source.strip(), language)
     except Exception as exc:
+        traceback.print_exc()
         st.error(
             f"Analysis failed: {exc}\n\nPlease check your input or API configuration and try again."
         )

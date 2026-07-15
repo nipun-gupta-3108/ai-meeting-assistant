@@ -36,7 +36,7 @@ def convert_media_to_wav(input_path: str) -> str:
     output_path = os.path.splitext(input_path)[0] + "_converted.wav"
 
     command = [
-        "ffmpeg",
+        ffmpeg_path,
         "-y",
         "-i",
         input_path,
