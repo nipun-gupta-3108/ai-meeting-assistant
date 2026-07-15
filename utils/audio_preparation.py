@@ -33,12 +33,6 @@ def download_audio_from_youtube(url: str) -> str:
 
 
 def convert_media_to_wav(input_path: str) -> str:
-    print("=" * 50)
-    print("INPUT PATH:", input_path)
-    print("EXISTS:", os.path.exists(input_path))
-    print("SIZE:", os.path.getsize(input_path) if os.path.exists(input_path) else "N/A")
-    print("=" * 50)
-
     output_path = os.path.splitext(input_path)[0] + "_converted.wav"
 
     command = [

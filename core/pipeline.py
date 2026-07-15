@@ -13,7 +13,6 @@ def run_meeting_assistant_pipeline(source: str, language: str = "english") -> di
     chunks = prepare_audio_chunks(source)
 
     transcript = transcribe_audio_chunks(chunks, language)
-    print(f"Transcript preview (first 300 characters): {transcript[:300]}")
 
     title = generate_meeting_title(transcript)
 

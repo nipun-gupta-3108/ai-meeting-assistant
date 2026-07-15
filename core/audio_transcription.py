@@ -4,7 +4,6 @@ import torch
 import requests
 from pydub import AudioSegment
 import streamlit as st
-import time
 
 # Sarvam's sync STT-translate API rejects audio longer than 30s.
 # We slice each chunk into 25s pieces (with a 5s safety margin) before sending.
@@ -53,8 +52,6 @@ def transcribe_audio_chunk_with_whisper(chunk_path: str) -> str:
 
 
 def _send_audio_piece_to_sarvam(piece_path: str) -> str:
-    print("=" * 60)
-    print("Sending to Sarvam:", piece_path)
 
     headers = {"api-subscription-key": SARVAM_API_KEY}
 
@@ -65,9 +62,6 @@ def _send_audio_piece_to_sarvam(piece_path: str) -> str:
             "with_diarization": "false",
         }
 
-        print("Making POST request...")
-        start = time.time()
-
         response = requests.post(
             SARVAM_STT_TRANSLATE_URL,
             headers=headers,
@@ -76,17 +70,9 @@ def _send_audio_piece_to_sarvam(piece_path: str) -> str:
             timeout=30,
         )
 
-        print("Finished in", time.time() - start, "seconds")
-        print(response.status_code)
-        print(response.text)
-
-    print("Response received:", response.status_code)
-
     response.raise_for_status()
 
     data = response.json()
-
-    print("Response JSON:", data)
 
     text = data.get("transcript")
 
@@ -109,22 +95,14 @@ def transcribe_audio_chunk_with_sarvam(chunk_path: str) -> str:
     piece_ms = SARVAM_PIECE_SECONDS * 1000
 
     full_text = ""
-    total_pieces = (len(audio) + piece_ms - 1) // piece_ms
-
-    print(f"Chunk duration: {len(audio)/1000:.1f} sec")
 
     for i, start in enumerate(range(0, len(audio), piece_ms)):
-        print(f"Creating piece {i+1}/{total_pieces}")
         piece = audio[start : start + piece_ms]
         piece_path = f"{chunk_path}_sv_{i}.wav"
         piece.export(piece_path, format="wav")
-        print("Exported:", piece_path)
 
         try:
-            print(f"  → Sarvam piece {i + 1}/{total_pieces} ...")
             piece_text = _send_audio_piece_to_sarvam(piece_path)
-
-            print("Returned transcript:", repr(piece_text))
 
             if piece_text:
                 full_text += piece_text + " "

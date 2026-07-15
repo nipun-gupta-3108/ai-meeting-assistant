@@ -91,7 +91,5 @@ Transcript context:
 
 
 def ask_transcript_question(rag_chain, question: str) -> str:
-    print(f"Question : {question}")
     answer = rag_chain.invoke(question)
-    print(f"answer :{answer}")
     return answer
