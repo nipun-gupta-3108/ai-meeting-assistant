@@ -52,7 +52,6 @@ def transcribe_audio_chunk_with_whisper(chunk_path: str) -> str:
 
 
 def _send_audio_piece_to_sarvam(piece_path: str) -> str:
-
     headers = {"api-subscription-key": SARVAM_API_KEY}
 
     with open(piece_path, "rb") as f:
@@ -77,7 +76,7 @@ def _send_audio_piece_to_sarvam(piece_path: str) -> str:
     text = data.get("transcript")
 
     if text is None:
-        print("⚠️ Transcript missing in response.")
+        print("Warning: Sarvam response did not contain a transcript.")
         return ""
 
     return text

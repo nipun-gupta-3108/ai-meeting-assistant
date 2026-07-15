@@ -52,6 +52,7 @@ def convert_media_to_wav(input_path: str) -> str:
         command,
         capture_output=True,
         text=True,
+        check=False,
     )
 
     if result.returncode != 0:
