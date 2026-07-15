@@ -1,4 +1,5 @@
 import sys
+import uuid
 
 # Streamlit Community Cloud ships an old system SQLite (<3.35), which
 # ChromaDB requires at a minimum. This swaps in pysqlite3-binary's modern
@@ -29,8 +30,13 @@ STYLE_PATH = Path(__file__).parent / "assets" / "style.css"
 
 
 def save_uploaded_file(uploaded_file) -> str:
-    file_path = UPLOAD_DIR / uploaded_file.name
+    extension = Path(uploaded_file.name).suffix
+    filename = f"{uuid.uuid4().hex}{extension}"
+
+    file_path = UPLOAD_DIR / filename
+
     file_path.write_bytes(uploaded_file.getbuffer())
+
     return str(file_path)
 
 
