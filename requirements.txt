@@ -9,6 +9,7 @@ pydub>=0.25.1
 
 # ── Speech-to-Text (Whisper) ─────────────────────────────────────────────────
 openai-whisper>=20231117
+faster-whisper>=1.1.1
 torch>=2.2.0
 torchaudio>=2.2.0
 torchvision>=0.17.2
