@@ -13,9 +13,9 @@ def format_retrieved_documents(docs):
     return "\n\n".join([doc.page_content for doc in docs])
 
 
-def build_transcript_rag_chain(transcript: str):
+def build_transcript_rag_chain(transcript: str, collection_name: str):
 
-    vector_store = build_transcript_vector_store(transcript)
+    vector_store = build_transcript_vector_store(transcript, collection_name=collection_name)
 
     retriever = create_transcript_retriever(vector_store, k=4)
 

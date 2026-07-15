@@ -14,7 +14,9 @@ def create_embedding_model():
     )
 
 
-def build_transcript_vector_store(transcript: str) -> Chroma:
+def build_transcript_vector_store(
+    transcript: str, collection_name: str = COLLECTION_NAME
+) -> Chroma:
     print("Building vector Store")
 
     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
@@ -29,7 +31,7 @@ def build_transcript_vector_store(transcript: str) -> Chroma:
     vector_store = Chroma.from_documents(
         documents=docs,
         embedding=embeddings,
-        collection_name=COLLECTION_NAME,
+        collection_name=collection_name,
         persist_directory=CHROMA_DIR,
     )
 
@@ -49,4 +51,3 @@ def load_transcript_vector_store() -> Chroma:
 
 def create_transcript_retriever(vector_store: Chroma, k: int = 4):
     return vector_store.as_retriever(search_type="similarity", search_kwargs={"k": k})
-
