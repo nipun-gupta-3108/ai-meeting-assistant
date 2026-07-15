@@ -1,116 +1,156 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+
 .stApp {
-    background: #0f172a;
-    color: #e5e7eb;
+  background: #0f172a;
+  color: #e5e7eb;
+  font-family:
+    "Inter",
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
 }
 
 [data-testid="stSidebar"] {
-    background: #111827;
-    border-right: 1px solid rgba(148, 163, 184, 0.18);
+  background: #111827;
+  border-right: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+[data-testid="stSidebar"] small {
+  color: #67e8f9;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .main .block-container {
-    max-width: 1180px;
-    padding-top: 2rem;
-    padding-bottom: 3rem;
+  max-width: 1180px;
+  padding-top: 2rem;
+  padding-bottom: 3rem;
 }
 
 .hero {
-    border: 1px solid rgba(148, 163, 184, 0.22);
-    background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.94));
-    padding: 28px;
-    border-radius: 8px;
-    margin-bottom: 22px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: linear-gradient(
+    135deg,
+    rgba(15, 23, 42, 0.96),
+    rgba(30, 41, 59, 0.94)
+  );
+  padding: 32px;
+  border-radius: 8px;
+  margin-bottom: 22px;
 }
 
 .eyebrow {
-    color: #67e8f9;
-    font-size: 0.78rem;
-    font-weight: 700;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    margin-bottom: 10px;
+  color: #67e8f9;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
 }
 
 .hero h1 {
-    color: #f8fafc;
-    font-size: 3rem;
-    line-height: 1.08;
-    margin: 0 0 12px;
+  color: #f8fafc;
+  font-size: 3rem;
+  line-height: 1.05;
+  margin: 0 0 12px;
 }
 
 .hero p {
-    color: #cbd5e1;
-    font-size: 1.04rem;
-    margin: 0;
-    max-width: 760px;
+  color: #cbd5e1;
+  font-size: 1.04rem;
+  margin: 0;
+  max-width: 760px;
 }
 
 .metric-row {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 12px;
-    margin-bottom: 20px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
 }
 
 .metric-card {
-    border: 1px solid rgba(148, 163, 184, 0.22);
-    background: #1e293b;
-    border-radius: 8px;
-    padding: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-top: 2px solid #67e8f9;
+  background: #1e293b;
+  border-radius: 8px;
+  padding: 16px;
 }
 
 .metric-card span {
-    color: #94a3b8;
-    display: block;
-    font-size: 0.8rem;
-    margin-bottom: 6px;
+  color: #94a3b8;
+  display: block;
+  font-size: 0.8rem;
+  margin-bottom: 6px;
 }
 
 .metric-card strong {
-    color: #f8fafc;
-    font-size: 1.45rem;
+  color: #f8fafc;
+  font-size: 1.45rem;
 }
 
 .section-card {
-    border: 1px solid rgba(148, 163, 184, 0.22);
-    background: #1e293b;
-    border-radius: 8px;
-    padding: 18px;
-    min-height: 180px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: #1e293b;
+  border-radius: 8px;
+  padding: 20px;
+  min-height: 180px;
 }
 
 .section-card h3 {
-    color: #f8fafc;
-    margin-top: 0;
+  color: #f8fafc;
+  margin-top: 0;
 }
 
 div[data-testid="stMarkdownContainer"] p,
 div[data-testid="stMarkdownContainer"] li {
-    color: #dbe4f0;
+  color: #dbe4f0;
 }
 
 .stTabs [data-baseweb="tab-list"] {
-    gap: 8px;
+  gap: 8px;
 }
 
 .stTabs [data-baseweb="tab"] {
-    background: #1e293b;
-    border-radius: 8px;
-    color: #cbd5e1;
-    border: 1px solid rgba(148, 163, 184, 0.18);
+  background: #1e293b;
+  border-radius: 8px;
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .stTabs [aria-selected="true"] {
-    background: #0e7490;
-    color: #ffffff;
+  background: #0e7490;
+  color: #ffffff;
+}
+
+.stButton > button {
+  background: #0e7490;
+  color: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.stButton > button:hover {
+  background: #0c6480;
+  color: #ffffff;
 }
 
 @media (max-width: 760px) {
-    .hero h1 {
-        font-size: 2.15rem;
-    }
+  .hero {
+    padding: 22px;
+  }
 
-    .metric-row {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
+  .hero h1 {
+    font-size: 2.15rem;
+  }
+
+  .metric-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .section-card {
+    min-height: 0;
+  }
 }

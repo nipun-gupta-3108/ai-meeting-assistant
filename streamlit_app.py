@@ -89,24 +89,35 @@ def render_section_card(title: str, body: str):
 
 def render_sidebar():
     st.sidebar.title(APP_NAME)
-    st.sidebar.caption("Transcribe, summarize, extract decisions, and chat with a meeting.")
+    st.sidebar.caption(
+        "Transcribe, summarize, extract decisions, and chat with a meeting."
+    )
 
+    st.sidebar.caption("SOURCE")
     input_mode = st.sidebar.radio("Input type", ["YouTube URL", "Upload file"])
-    language_label = st.sidebar.selectbox("Audio language", ["English", "Hinglish / Hindi"])
-    language = "hinglish" if language_label == "Hinglish / Hindi" else "english"
 
     source = ""
     uploaded_file = None
 
     if input_mode == "YouTube URL":
-        source = st.sidebar.text_input("YouTube URL", placeholder="https://www.youtube.com/watch?v=...")
+        source = st.sidebar.text_input(
+            "YouTube URL", placeholder="https://www.youtube.com/watch?v=..."
+        )
     else:
         uploaded_file = st.sidebar.file_uploader(
             "Upload audio or video",
             type=["mp3", "mp4", "wav", "m4a", "webm", "mov", "aac"],
         )
 
-    run_clicked = st.sidebar.button("Run analysis", type="primary", use_container_width=True)
+    st.sidebar.caption("OUTPUT LANGUAGE")
+    language_label = st.sidebar.selectbox(
+        "Audio language", ["English", "Hinglish / Hindi"]
+    )
+    language = "hinglish" if language_label == "Hinglish / Hindi" else "english"
+
+    run_clicked = st.sidebar.button(
+        "Run analysis", type="primary", use_container_width=True
+    )
 
     st.sidebar.divider()
     st.sidebar.caption("Required: FFmpeg, Groq API key, and Whisper dependencies.")
@@ -205,7 +216,9 @@ def render_result_tabs(result: dict):
                 with st.spinner("Searching transcript..."):
                     answer = ask_transcript_question(result["rag_chain"], question)
                 st.markdown(answer)
-            st.session_state.chat_history.append({"role": "assistant", "content": answer})
+            st.session_state.chat_history.append(
+                {"role": "assistant", "content": answer}
+            )
 
     with export_tab:
         st.download_button(
@@ -236,7 +249,9 @@ def run_analysis(input_mode: str, source: str, uploaded_file, language: str):
 
     st.session_state.chat_history = []
     try:
-        with st.spinner("Processing media, transcribing audio, and building meeting intelligence..."):
+        with st.spinner(
+            "Processing media, transcribing audio, and building meeting intelligence..."
+        ):
             result = run_meeting_assistant_pipeline(source.strip(), language)
     except Exception as exc:
         traceback.print_exc()
