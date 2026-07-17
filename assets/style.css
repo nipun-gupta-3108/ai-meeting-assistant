@@ -1,8 +1,8 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap");
 
 .stApp {
-  background: #ffffff;
-  color: #1f2328;
+  background: #0f172a;
+  color: #f8fafc;
   font-family:
     "Inter",
     -apple-system,
@@ -19,7 +19,7 @@
 h1,
 h2,
 h3 {
-  color: #16181d;
+  color: #f8fafc;
   font-weight: 500;
 }
 
@@ -27,7 +27,7 @@ h3 {
 .masthead {
   font-size: 14px;
   font-weight: 500;
-  color: #1f2328;
+  color: #f8fafc;
   margin-bottom: 3.5rem;
 }
 
@@ -36,12 +36,12 @@ h3 {
   font-weight: 500;
   text-align: center;
   margin: 0 0 8px;
-  color: #16181d;
+  color: #f8fafc;
 }
 
 .landing-sub {
   font-size: 14px;
-  color: #6b7280;
+  color: #94a3b8;
   text-align: center;
   margin: 0 0 2rem;
 }
@@ -53,35 +53,37 @@ div[role="radiogroup"] {
 }
 
 div[role="radiogroup"] label {
-  border: 1px solid #e5e7eb;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
   padding: 4px 10px;
-  background: #fafafa;
+  background: #111827;
 }
 
 /* Buttons */
 .stButton > button {
-  border: 1px solid #e5e7eb;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
   font-weight: 500;
-  background: #ffffff;
-  color: #1f2328;
+  background: #111827;
+  color: #f8fafc;
 }
 
 .stButton > button:hover {
-  background: #f5f5f5;
-  color: #1f2328;
+  background: #1e293b;
+  color: #f8fafc;
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .stButton > button[kind="primary"] {
-  background: #111827;
-  color: #ffffff;
-  border: 1px solid #111827;
+  background: #f8fafc;
+  color: #0f172a;
+  border: 1px solid #f8fafc;
 }
 
 .stButton > button[kind="primary"]:hover {
-  background: #000000;
-  color: #ffffff;
+  background: #e2e8f0;
+  color: #0f172a;
+  border: 1px solid #e2e8f0;
 }
 
 /* Centered processing state */
@@ -101,12 +103,12 @@ div[role="radiogroup"] label {
   font-size: 26px;
   font-weight: 500;
   margin: 1.5rem 0 6px;
-  color: #16181d;
+  color: #f8fafc;
 }
 
 .workspace-meta {
   font-size: 13px;
-  color: #6b7280;
+  color: #94a3b8;
   margin: 0 0 2.5rem;
 }
 
@@ -114,12 +116,12 @@ div[role="radiogroup"] label {
   font-size: 16px;
   font-weight: 500;
   margin: 0 0 10px;
-  color: #16181d;
+  color: #f8fafc;
 }
 
 .empty-state {
   font-size: 14px;
-  color: #9ca3af;
+  color: #94a3b8;
   font-style: italic;
   margin: 0;
 }
@@ -128,18 +130,18 @@ div[role="radiogroup"] label {
   max-height: 420px;
   overflow-y: auto;
   padding: 16px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
-  background: #fafafa;
+  background: #111827;
   font-size: 14px;
   line-height: 1.7;
   white-space: pre-wrap;
-  color: #374151;
+  color: #94a3b8;
 }
 
 .section-divider {
   border: none;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   margin: 2.5rem 0;
 }
 
