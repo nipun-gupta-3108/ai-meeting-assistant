@@ -61,6 +61,7 @@ def initialize_state():
         "pending_source": None,
         "pending_language": "english",
         "error_message": None,
+        "input_mode": "YouTube URL",
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -85,58 +86,102 @@ def render_insight_section(title: str, content: str, empty_key: str):
 
 
 def render_landing():
-    st.markdown(f'<div class="masthead">{APP_NAME}</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="brand-row">'
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f8fafc" '
+        'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'
+        '<rect x="9" y="2" width="6" height="11" rx="3"></rect>'
+        '<path d="M5 10v1a7 7 0 0 0 14 0v-1"></path>'
+        '<line x1="12" y1="18" x2="12" y2="22"></line>'
+        '<line x1="8" y1="22" x2="16" y2="22"></line>'
+        "</svg>"
+        f'<span class="brand-name">{APP_NAME}</span>'
+        "</div>",
+        unsafe_allow_html=True,
+    )
 
     _, center, _ = st.columns([1, 3, 1])
     with center:
         st.markdown(
-            '<p class="landing-title">What meeting should we go through</p>',
+            '<p class="landing-headline">What meeting should we go through?</p>',
             unsafe_allow_html=True,
         )
         st.markdown(
-            '<p class="landing-sub">Paste a YouTube link or upload a recording</p>',
+            '<p class="landing-sub">Turn recordings into transcripts, summaries, '
+            "action items, and searchable Q&amp;A.</p>",
             unsafe_allow_html=True,
         )
 
         if st.session_state.error_message:
             st.error(st.session_state.error_message)
 
-        input_mode = st.radio(
-            "Source",
-            ["YouTube URL", "Upload file"],
-            horizontal=True,
-            label_visibility="collapsed",
-        )
+        with st.container(border=True):
+            # Source mode lives in session_state and is switched by two real
+            # buttons (not st.radio + CSS), so it survives reruns correctly
+            # and never depends on Streamlit's internal DOM structure.
+            toggle_col_a, toggle_col_b = st.columns(2)
+            with toggle_col_a:
+                if st.button(
+                    "YouTube URL",
+                    type=(
+                        "primary"
+                        if st.session_state.input_mode == "YouTube URL"
+                        else "secondary"
+                    ),
+                    use_container_width=True,
+                    key="select_mode_url",
+                ):
+                    st.session_state.input_mode = "YouTube URL"
+            with toggle_col_b:
+                if st.button(
+                    "Upload file",
+                    type=(
+                        "primary"
+                        if st.session_state.input_mode == "Upload file"
+                        else "secondary"
+                    ),
+                    use_container_width=True,
+                    key="select_mode_upload",
+                ):
+                    st.session_state.input_mode = "Upload file"
 
-        source = ""
-        uploaded_file = None
-        if input_mode == "YouTube URL":
-            source = st.text_input(
-                "YouTube URL",
-                placeholder="https://www.youtube.com/watch?v=...",
-                label_visibility="collapsed",
-            )
-        else:
-            uploaded_file = st.file_uploader(
-                "Upload audio or video",
-                type=["mp3", "mp4", "wav", "m4a", "webm", "mov", "aac"],
-                label_visibility="collapsed",
-            )
+            # Only the field for the CURRENT mode is rendered/read this run,
+            # so a leftover value from the other mode can never be submitted.
+            source = ""
+            uploaded_file = None
+            if st.session_state.input_mode == "YouTube URL":
+                source = st.text_input(
+                    "YouTube URL",
+                    placeholder="https://www.youtube.com/watch?v=...",
+                    label_visibility="collapsed",
+                )
+            else:
+                uploaded_file = st.file_uploader(
+                    "Upload audio or video",
+                    type=["mp3", "mp4", "wav", "m4a", "webm", "mov", "aac"],
+                    label_visibility="collapsed",
+                )
 
-        lang_col, button_col = st.columns([2, 1])
-        with lang_col:
-            language_label = st.selectbox(
-                "Language",
-                ["English", "Hinglish / Hindi"],
-                label_visibility="collapsed",
-            )
-        with button_col:
+            lang_col, _spacer_col = st.columns(2)
+            with lang_col:
+                language_label = st.selectbox(
+                    "Language",
+                    ["English", "Hinglish / Hindi"],
+                    label_visibility="collapsed",
+                )
+
             run_clicked = st.button(
-                "Run analysis", type="primary", use_container_width=True
+                "Analyze meeting", type="primary", use_container_width=True
             )
+
+        st.markdown(
+            '<p class="landing-footnote">Supports YouTube links, MP3, MP4, WAV and M4A</p>',
+            unsafe_allow_html=True,
+        )
 
         if run_clicked:
             st.session_state.error_message = None
+            input_mode = st.session_state.input_mode
 
             if input_mode == "Upload file":
                 if uploaded_file is None:
