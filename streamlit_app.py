@@ -1,25 +1,15 @@
-import sys
-import uuid
-
-# Streamlit Community Cloud ships an old system SQLite (<3.35), which
-# ChromaDB requires at a minimum. This swaps in pysqlite3-binary's modern
-# build. Must run before chromadb (or anything importing it) is loaded.
-try:
-    __import__("pysqlite3")
-    sys.modules["sqlite3"] = sys.modules["pysqlite3"]
-except ImportError:
-    pass
-
-
-from pathlib import Path
+import html
 import traceback
+import uuid
+from pathlib import Path
+
 import streamlit as st
 from dotenv import load_dotenv
 
 load_dotenv()
 
-from core.transcript_qa import ask_transcript_question
 from core.pipeline import run_meeting_assistant_pipeline
+from core.transcript_qa import ask_transcript_question
 
 APP_NAME = "AI Meeting Assistant"
 
@@ -28,15 +18,24 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 STYLE_PATH = Path(__file__).parent / "assets" / "style.css"
 
+# Exact fallback strings produced by core.transcript_insights when a section
+# has nothing to report. Only used here to render a quiet empty state instead
+# of plain body text — this is a display choice, not a re-implementation of
+# any backend logic.
+EMPTY_STATE_TEXT = {
+    "action_items": "No action items found.",
+    "key_decisions": "No key decisions found.",
+    "open_questions": "No open questions found.",
+}
+
+SECTION_GAP = '<div style="height:2.25rem"></div>'
+
 
 def save_uploaded_file(uploaded_file) -> str:
     extension = Path(uploaded_file.name).suffix
     filename = f"{uuid.uuid4().hex}{extension}"
-
     file_path = UPLOAD_DIR / filename
-
     file_path.write_bytes(uploaded_file.getbuffer())
-
     return str(file_path)
 
 
@@ -57,7 +56,11 @@ def initialize_state():
     defaults = {
         "result": None,
         "chat_history": [],
-        "last_source": "",
+        "language_label": "English",
+        "processing": False,
+        "pending_source": None,
+        "pending_language": "english",
+        "error_message": None,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -65,169 +68,157 @@ def initialize_state():
 
 
 def render_styles():
-    """Load the external stylesheet and inject it into the page."""
     css = STYLE_PATH.read_text(encoding="utf-8")
     st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
 
-def render_metric_row(items: list[tuple[str, str]]):
-    """Render a row of metric cards, e.g. [("Title", "Standup"), ...]."""
-    cards = "".join(
-        f'<div class="metric-card"><span>{label}</span><strong>{value}</strong></div>'
-        for label, value in items
-    )
-    st.markdown(f'<div class="metric-row">{cards}</div>', unsafe_allow_html=True)
-
-
-def render_section_card(title: str, body: str):
-    """Render a single titled info card used on the empty-state screen."""
-    st.markdown(
-        f'<div class="section-card"><h3>{title}</h3><p>{body}</p></div>',
-        unsafe_allow_html=True,
-    )
-
-
-def render_sidebar():
-    st.sidebar.title(APP_NAME)
-    st.sidebar.caption(
-        "Transcribe, summarize, extract decisions, and chat with a meeting."
-    )
-
-    st.sidebar.caption("SOURCE")
-    input_mode = st.sidebar.radio("Input type", ["YouTube URL", "Upload file"])
-
-    source = ""
-    uploaded_file = None
-
-    if input_mode == "YouTube URL":
-        source = st.sidebar.text_input(
-            "YouTube URL", placeholder="https://www.youtube.com/watch?v=..."
+def render_insight_section(title: str, content: str, empty_key: str):
+    """Render one insights section, showing a quiet empty state when the
+    section content matches the parser's known "nothing found" fallback."""
+    st.markdown(f'<p class="section-heading">{title}</p>', unsafe_allow_html=True)
+    if content.strip() == EMPTY_STATE_TEXT[empty_key]:
+        st.markdown(
+            f'<p class="empty-state">{html.escape(content)}</p>', unsafe_allow_html=True
         )
     else:
-        uploaded_file = st.sidebar.file_uploader(
-            "Upload audio or video",
-            type=["mp3", "mp4", "wav", "m4a", "webm", "mov", "aac"],
+        st.markdown(content)
+
+
+def render_landing():
+    st.markdown(f'<div class="masthead">{APP_NAME}</div>', unsafe_allow_html=True)
+
+    _, center, _ = st.columns([1, 3, 1])
+    with center:
+        st.markdown(
+            '<p class="landing-title">What meeting should we go through</p>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            '<p class="landing-sub">Paste a YouTube link or upload a recording</p>',
+            unsafe_allow_html=True,
         )
 
-    st.sidebar.caption("OUTPUT LANGUAGE")
-    language_label = st.sidebar.selectbox(
-        "Audio language", ["English", "Hinglish / Hindi"]
-    )
-    language = "hinglish" if language_label == "Hinglish / Hindi" else "english"
+        if st.session_state.error_message:
+            st.error(st.session_state.error_message)
 
-    run_clicked = st.sidebar.button(
-        "Run analysis", type="primary", use_container_width=True
-    )
-
-    st.sidebar.divider()
-    st.sidebar.caption("Required: FFmpeg, Groq API key, and Whisper dependencies.")
-
-    return input_mode, source, uploaded_file, language, run_clicked
-
-
-def render_hero():
-    st.markdown(
-        f"""
-        <div class="hero">
-            <div class="eyebrow">Meeting Intelligence Workspace</div>
-            <h1>{APP_NAME}</h1>
-            <p>Turn YouTube videos or meeting recordings into transcripts, summaries, action items, decisions, and searchable Q&A.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def render_empty_state():
-    render_metric_row(
-        [
-            ("Input", "URL or file"),
-            ("Transcription", "Whisper"),
-            ("Analysis", "Groq"),
-            ("Search", "ChromaDB"),
-        ]
-    )
-
-    col1, col2 = st.columns(2)
-    with col1:
-        render_section_card(
-            "What it does",
-            "Processes a video or audio source, creates a transcript, and extracts "
-            "the meeting details people usually lose after the call.",
-        )
-    with col2:
-        render_section_card(
-            "How to start",
-            "Choose an input type in the sidebar, select the language, then run "
-            "the analysis. Results will appear here.",
+        input_mode = st.radio(
+            "Source",
+            ["YouTube URL", "Upload file"],
+            horizontal=True,
+            label_visibility="collapsed",
         )
 
-
-def render_result_tabs(result: dict):
-    export_text = build_text_export(result)
-
-    render_metric_row(
-        [
-            ("Title", result["title"]),
-            ("Transcript", f"{len(result['transcript'].split())} words"),
-            ("Insights", "3 sections"),
-            ("Q&A", "Ready"),
-        ]
-    )
-
-    summary_tab, insights_tab, transcript_tab, chat_tab, export_tab = st.tabs(
-        ["Summary", "Insights", "Transcript", "Chat", "Export"]
-    )
-
-    with summary_tab:
-        with st.container(border=True):
-            st.subheader(result["title"])
-            st.markdown(result["summary"])
-
-    with insights_tab:
-        col1, col2 = st.columns(2)
-        with col1:
-            with st.container(border=True):
-                st.markdown("#### Action Items")
-                st.markdown(result["action_items"])
-        with col2:
-            with st.container(border=True):
-                st.markdown("#### Key Decisions")
-                st.markdown(result["key_decisions"])
-        with st.container(border=True):
-            st.markdown("#### Open Questions")
-            st.markdown(result["open_questions"])
-
-    with transcript_tab:
-        st.text_area("Full transcript", result["transcript"], height=420)
-
-    with chat_tab:
-        for message in st.session_state.chat_history:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
-
-        question = st.chat_input("Ask a question about the transcript")
-        if question:
-            st.session_state.chat_history.append({"role": "user", "content": question})
-            with st.chat_message("user"):
-                st.markdown(question)
-
-            with st.chat_message("assistant"):
-                with st.spinner("Searching transcript..."):
-                    answer = ask_transcript_question(result["rag_chain"], question)
-                st.markdown(answer)
-            st.session_state.chat_history.append(
-                {"role": "assistant", "content": answer}
+        source = ""
+        uploaded_file = None
+        if input_mode == "YouTube URL":
+            source = st.text_input(
+                "YouTube URL",
+                placeholder="https://www.youtube.com/watch?v=...",
+                label_visibility="collapsed",
+            )
+        else:
+            uploaded_file = st.file_uploader(
+                "Upload audio or video",
+                type=["mp3", "mp4", "wav", "m4a", "webm", "mov", "aac"],
+                label_visibility="collapsed",
             )
 
-    with export_tab:
+        lang_col, button_col = st.columns([2, 1])
+        with lang_col:
+            language_label = st.selectbox(
+                "Language",
+                ["English", "Hinglish / Hindi"],
+                label_visibility="collapsed",
+            )
+        with button_col:
+            run_clicked = st.button(
+                "Run analysis", type="primary", use_container_width=True
+            )
+
+        if run_clicked:
+            st.session_state.error_message = None
+
+            if input_mode == "Upload file":
+                if uploaded_file is None:
+                    st.warning("Upload an audio or video file before running analysis.")
+                    return
+                resolved_source = save_uploaded_file(uploaded_file)
+            elif not source.strip():
+                st.warning("Enter a YouTube URL before running analysis.")
+                return
+            else:
+                resolved_source = source.strip()
+
+            st.session_state.pending_source = resolved_source
+            st.session_state.pending_language = (
+                "hinglish" if language_label == "Hinglish / Hindi" else "english"
+            )
+            st.session_state.language_label = language_label
+            st.session_state.chat_history = []
+            st.session_state.processing = True
+            st.rerun()
+
+
+def render_processing():
+    _, center, _ = st.columns([1, 3, 1])
+    with center:
+        with st.spinner(
+            "Processing media, transcribing audio, and building meeting intelligence..."
+        ):
+            try:
+                result = run_meeting_assistant_pipeline(
+                    st.session_state.pending_source,
+                    st.session_state.pending_language,
+                )
+            except Exception as exc:
+                traceback.print_exc()
+                st.session_state.processing = False
+                st.session_state.error_message = (
+                    f"Analysis failed: {exc}. Please check your input or "
+                    "API configuration and try again."
+                )
+                st.rerun()
+                return
+
+        st.session_state.result = result
+        st.session_state.processing = False
+        st.rerun()
+
+
+def render_chat(result: dict):
+    st.markdown(
+        '<p class="section-heading">Ask about this meeting</p>', unsafe_allow_html=True
+    )
+
+    for message in st.session_state.chat_history:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    question = st.chat_input("Ask anything about this meeting...")
+    if question:
+        st.session_state.chat_history.append({"role": "user", "content": question})
+        with st.chat_message("user"):
+            st.markdown(question)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Searching transcript..."):
+                answer = ask_transcript_question(result["rag_chain"], question)
+            st.markdown(answer)
+        st.session_state.chat_history.append({"role": "assistant", "content": answer})
+
+
+def render_export(result: dict):
+    st.markdown('<p class="section-heading">Export</p>', unsafe_allow_html=True)
+    col1, col2 = st.columns(2)
+    with col1:
         st.download_button(
-            "Download TXT report",
-            data=export_text,
+            "Download report",
+            data=build_text_export(result),
             file_name="meeting_analysis.txt",
             mime="text/plain",
             use_container_width=True,
         )
+    with col2:
         st.download_button(
             "Download transcript",
             data=result["transcript"],
@@ -237,54 +228,59 @@ def render_result_tabs(result: dict):
         )
 
 
-def run_analysis(input_mode: str, source: str, uploaded_file, language: str):
-    if input_mode == "Upload file":
-        if uploaded_file is None:
-            st.warning("Upload an audio or video file before running analysis.")
-            return
-        source = save_uploaded_file(uploaded_file)
-    elif not source.strip():
-        st.warning("Enter a YouTube URL before running analysis.")
-        return
+def render_workspace(result: dict):
+    if st.button("← New meeting"):
+        st.session_state.result = None
+        st.session_state.chat_history = []
+        st.session_state.error_message = None
+        st.rerun()
 
-    st.session_state.chat_history = []
-    try:
-        with st.spinner(
-            "Processing media, transcribing audio, and building meeting intelligence..."
-        ):
-            result = run_meeting_assistant_pipeline(source.strip(), language)
-    except Exception as exc:
-        traceback.print_exc()
-        st.error(
-            f"Analysis failed: {exc}\n\nPlease check your input or API configuration and try again."
+    word_count = len(result["transcript"].split())
+
+    st.markdown(
+        f'<h1 class="workspace-h1">{html.escape(result["title"])}</h1>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f'<p class="workspace-meta">{html.escape(st.session_state.language_label)} • {word_count} words</p>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown('<p class="section-heading">Summary</p>', unsafe_allow_html=True)
+    st.markdown(result["summary"])
+    st.markdown(SECTION_GAP, unsafe_allow_html=True)
+
+    render_insight_section("Action items", result["action_items"], "action_items")
+    st.markdown(SECTION_GAP, unsafe_allow_html=True)
+    render_insight_section("Key decisions", result["key_decisions"], "key_decisions")
+    st.markdown(SECTION_GAP, unsafe_allow_html=True)
+    render_insight_section("Open questions", result["open_questions"], "open_questions")
+    st.markdown(SECTION_GAP, unsafe_allow_html=True)
+
+    with st.expander("Full transcript"):
+        st.markdown(
+            f'<div class="transcript-box">{html.escape(result["transcript"])}</div>',
+            unsafe_allow_html=True,
         )
-        return
 
-    st.session_state.result = result
-    st.session_state.last_source = source
+    st.markdown('<hr class="section-divider" />', unsafe_allow_html=True)
+    render_chat(result)
 
-    st.success("Analysis complete.")
+    st.markdown('<hr class="section-divider" />', unsafe_allow_html=True)
+    render_export(result)
 
 
 def main():
-    st.set_page_config(
-        page_title=APP_NAME,
-        page_icon="🎙️",
-        layout="wide",
-    )
+    st.set_page_config(page_title=APP_NAME, page_icon="🎙️", layout="centered")
     initialize_state()
     render_styles()
 
-    input_mode, source, uploaded_file, language, run_clicked = render_sidebar()
-    render_hero()
-
-    if run_clicked:
-        run_analysis(input_mode, source, uploaded_file, language)
-
     if st.session_state.result:
-        render_result_tabs(st.session_state.result)
+        render_workspace(st.session_state.result)
+    elif st.session_state.processing:
+        render_processing()
     else:
-        render_empty_state()
+        render_landing()
 
 
 if __name__ == "__main__":
