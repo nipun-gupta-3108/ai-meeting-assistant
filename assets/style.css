@@ -23,12 +23,18 @@ h3 {
   font-weight: 500;
 }
 
-/* Landing */
+/* Landing
+   ─────────────────────────────────────────────────────────────────────────
+   Shared 640px measure: .brand-row, .landing-headline, .landing-sub,
+   .landing-footnote, and the bordered panel below all share the same
+   max-width + margin:0 auto so their edges line up and the composition
+   reads as one grouped block rather than independently centered elements. */
 .brand-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 3.5rem;
+  max-width: 640px;
+  margin: 0 auto 2.75rem;
 }
 
 .brand-name {
@@ -37,45 +43,59 @@ h3 {
   color: #f8fafc;
 }
 
-.landing-headline {
-  font-size: 40px;
+/* Streamlit renders this <p> inside its own stMarkdownContainer, which
+   carries Streamlit's default paragraph typography via a compound selector
+   that outranks a single custom class on plain specificity — that's why
+   `.landing-headline { font-size: 40px }` alone was being overridden and
+   rendering at Streamlit's default size instead. Anchoring the rule to the
+   stable stMarkdownContainer test id raises specificity to win reliably;
+   !important on the two properties that matter locks it in without having
+   to fight Streamlit's rule on every future release. */
+[data-testid="stMarkdownContainer"] p.landing-headline {
+  font-size: 40px !important;
+  line-height: 1.15 !important;
   font-weight: 600;
   letter-spacing: -0.02em;
-  line-height: 1.15;
   text-align: center;
-  margin: 0 0 16px;
+  max-width: 640px;
+  margin: 0 auto 14px;
   color: #f8fafc;
 }
 
-.landing-sub {
-  font-size: 16px;
+[data-testid="stMarkdownContainer"] p.landing-sub {
+  font-size: 16px !important;
+  line-height: 1.6 !important;
   color: #94a3b8;
-  line-height: 1.6;
   text-align: center;
   max-width: 460px;
-  margin: 0 auto 2.5rem;
+  margin: 0 auto 2.75rem;
 }
 
-.landing-footnote {
-  font-size: 13px;
+[data-testid="stMarkdownContainer"] p.landing-footnote {
+  font-size: 13px !important;
   color: #94a3b8;
   text-align: center;
-  margin: 18px 0 0;
+  max-width: 640px;
+  margin: 18px auto 0;
 }
 
 /* Command surface — the bordered st.container(border=True) wrapping the
    source toggle, input, language selector, and CTA. This targets Streamlit's
    own testid for bordered containers rather than a deep/guessed selector;
    if a future Streamlit version renames it, the container still renders
-   with Streamlit's default border — it just loses this exact background
-   and radius. */
+   with Streamlit's default border — it just loses this exact background,
+   width, and spacing. */
 [data-testid="stVerticalBlockBorderWrapper"] {
   background: #111827;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
   border-radius: 20px !important;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 32px;
 }
 
-/* Buttons */
+/* Buttons — unscoped rule, applies app-wide (landing toggle/CTA, workspace
+   "New meeting" and download buttons) exactly as it did before. */
 .stButton > button {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
@@ -100,6 +120,93 @@ h3 {
   background: #e2e8f0;
   color: #0f172a;
   border: 1px solid #e2e8f0;
+}
+
+/* Landing panel buttons only (scoped under the bordered wrapper) — refines
+   the CTA's size/weight without touching buttons anywhere else in the app. */
+[data-testid="stVerticalBlockBorderWrapper"] .stButton > button {
+  border-radius: 10px;
+  padding: 12px 18px;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+[data-testid="stVerticalBlockBorderWrapper"]
+  .stButton
+  > button[kind="primary"] {
+  font-weight: 600;
+}
+
+/* Source toggle (YouTube URL / Upload file) — the only buttons in the panel
+   nested inside a horizontal block, so this selector reaches them alone and
+   overrides the general panel-button rule above via higher specificity.
+   Active = filled (kind="primary"), inactive = clearly subtle (kind="secondary"). */
+[data-testid="stVerticalBlockBorderWrapper"]
+  [data-testid="stHorizontalBlock"]
+  .stButton
+  > button {
+  padding: 9px 14px;
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+[data-testid="stVerticalBlockBorderWrapper"]
+  [data-testid="stHorizontalBlock"]
+  .stButton
+  > button[kind="primary"] {
+  font-weight: 500;
+}
+
+[data-testid="stVerticalBlockBorderWrapper"]
+  [data-testid="stHorizontalBlock"]
+  .stButton
+  > button[kind="secondary"] {
+  background: transparent;
+  color: #94a3b8;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-testid="stVerticalBlockBorderWrapper"]
+  [data-testid="stHorizontalBlock"]
+  .stButton
+  > button[kind="secondary"]:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #f8fafc;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+/* URL input — Streamlit renders a plain <input> here with no visible field
+   styling by default; this gives it an actual dark surface + border so the
+   placeholder reads as sitting inside a field rather than floating in space. */
+[data-testid="stTextInput"] input {
+  background: #0b1220;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: #f8fafc;
+}
+
+[data-testid="stTextInput"] input::placeholder {
+  color: #64748b;
+}
+
+[data-testid="stTextInput"] input:focus {
+  border-color: rgba(248, 250, 252, 0.45);
+  box-shadow: none;
+}
+
+/* Language select — Streamlit builds this on top of the third-party BaseWeb
+   library, so `data-baseweb="select"` (not a Streamlit test id) is the only
+   reliable hook for the visible control; !important is needed because
+   BaseWeb applies its own inline-specificity CSS-in-JS styles. */
+[data-testid="stSelectbox"] [data-baseweb="select"] > div {
+  background: #0b1220 !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  border-radius: 8px !important;
+  min-height: 40px !important;
+  font-size: 14px !important;
 }
 
 /* Centered processing state */
@@ -174,11 +281,15 @@ h3 {
     margin-bottom: 2.5rem;
   }
 
-  .landing-headline {
-    font-size: 28px;
+  [data-testid="stMarkdownContainer"] p.landing-headline {
+    font-size: 28px !important;
   }
 
-  .landing-sub {
-    font-size: 14px;
+  [data-testid="stMarkdownContainer"] p.landing-sub {
+    font-size: 14px !important;
+  }
+
+  [data-testid="stVerticalBlockBorderWrapper"] {
+    padding: 24px;
   }
 }
