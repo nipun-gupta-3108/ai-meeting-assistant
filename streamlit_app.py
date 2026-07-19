@@ -18,17 +18,60 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 STYLE_PATH = Path(__file__).parent / "assets" / "style.css"
 
-# Exact fallback strings produced by core.transcript_insights when a section
-# has nothing to report. Only used here to render a quiet empty state instead
-# of plain body text — this is a display choice, not a re-implementation of
-# any backend logic.
-EMPTY_STATE_TEXT = {
+# Empty-state copy shown when a section's list comes back empty (either the
+# meeting genuinely had nothing to report, or JSON parsing fell back to an
+# empty list). Display-only — matches the wording the LLM used to produce
+# directly, just no longer relies on exact string matching against it.
+EMPTY_STATE_MESSAGES = {
     "action_items": "No action items found.",
     "key_decisions": "No key decisions found.",
     "open_questions": "No open questions found.",
 }
 
 SECTION_GAP = '<div style="height:2.25rem"></div>'
+
+
+def format_summary_bullets(bullets: list) -> str:
+    """Render summary bullets (a list of strings) as markdown, matching the
+    bullet-point format the LLM used to return directly."""
+    return "\n".join(f"- {bullet}" for bullet in bullets)
+
+
+def format_insight_items(items: list) -> str:
+    """Render one insights section's items as numbered markdown.
+
+    Action items arrive as dicts ({task, owner, deadline}); key decisions
+    and open questions arrive as plain strings. Output matches the numbered
+    list format the LLM used to return directly.
+    """
+    lines = []
+    for i, item in enumerate(items, start=1):
+        if isinstance(item, dict):
+            task = item.get("task", "")
+            owner = item.get("owner", "Not specified")
+            deadline = item.get("deadline", "Not specified")
+            lines.append(f"{i}. **{task}** — Owner: {owner}, Deadline: {deadline}")
+        else:
+            lines.append(f"{i}. {item}")
+    return "\n".join(lines)
+
+
+def format_action_items_for_export(items: list) -> str:
+    if not items:
+        return EMPTY_STATE_MESSAGES["action_items"]
+    lines = [
+        f"{i}. {item.get('task', '')} "
+        f"(Owner: {item.get('owner', 'Not specified')}, "
+        f"Deadline: {item.get('deadline', 'Not specified')})"
+        for i, item in enumerate(items, start=1)
+    ]
+    return "\n".join(lines)
+
+
+def format_string_list_for_export(items: list, empty_key: str) -> str:
+    if not items:
+        return EMPTY_STATE_MESSAGES[empty_key]
+    return "\n".join(f"{i}. {item}" for i, item in enumerate(items, start=1))
 
 
 def save_uploaded_file(uploaded_file) -> str:
@@ -40,13 +83,18 @@ def save_uploaded_file(uploaded_file) -> str:
 
 
 def build_text_export(result: dict) -> str:
+    summary_text = (
+        format_summary_bullets(result["summary"])
+        if result["summary"]
+        else "No summary available."
+    )
     return "\n\n".join(
         [
             f"Meeting Title\n{result['title']}",
-            f"Summary\n{result['summary']}",
-            f"Action Items\n{result['action_items']}",
-            f"Key Decisions\n{result['key_decisions']}",
-            f"Open Questions\n{result['open_questions']}",
+            f"Summary\n{summary_text}",
+            f"Action Items\n{format_action_items_for_export(result['action_items'])}",
+            f"Key Decisions\n{format_string_list_for_export(result['key_decisions'], 'key_decisions')}",
+            f"Open Questions\n{format_string_list_for_export(result['open_questions'], 'open_questions')}",
             f"Transcript\n{result['transcript']}",
         ]
     )
@@ -73,16 +121,17 @@ def render_styles():
     st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
 
-def render_insight_section(title: str, content: str, empty_key: str):
-    """Render one insights section, showing a quiet empty state when the
-    section content matches the parser's known "nothing found" fallback."""
+def render_insight_section(title: str, items: list, empty_key: str):
+    """Render one insights section, showing a quiet empty state when there
+    are no items to display."""
     st.markdown(f'<p class="section-heading">{title}</p>', unsafe_allow_html=True)
-    if content.strip() == EMPTY_STATE_TEXT[empty_key]:
+    if not items:
+        message = EMPTY_STATE_MESSAGES[empty_key]
         st.markdown(
-            f'<p class="empty-state">{html.escape(content)}</p>', unsafe_allow_html=True
+            f'<p class="empty-state">{html.escape(message)}</p>', unsafe_allow_html=True
         )
     else:
-        st.markdown(content)
+        st.markdown(format_insight_items(items))
 
 
 def render_landing():
@@ -296,7 +345,12 @@ def render_workspace(result: dict):
     )
 
     st.markdown('<p class="section-heading">Summary</p>', unsafe_allow_html=True)
-    st.markdown(result["summary"])
+    if result["summary"]:
+        st.markdown(format_summary_bullets(result["summary"]))
+    else:
+        st.markdown(
+            '<p class="empty-state">No summary available.</p>', unsafe_allow_html=True
+        )
     st.markdown(SECTION_GAP, unsafe_allow_html=True)
 
     render_insight_section("Action items", result["action_items"], "action_items")
