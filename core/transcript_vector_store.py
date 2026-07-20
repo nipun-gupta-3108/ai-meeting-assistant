@@ -8,6 +8,7 @@ CHROMA_DIR = "vector_db"
 COLLECTION_NAME = "meeting_transcript"
 EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 
+
 @lru_cache(maxsize=1)
 def create_embedding_model():
     return HuggingFaceEmbeddings(
@@ -20,7 +21,7 @@ def build_transcript_vector_store(
 ) -> Chroma:
     print("Building Vector Store...")
 
-    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+    splitter = RecursiveCharacterTextSplitter(chunk_size=1200, chunk_overlap=200)
     chunks = splitter.split_text(transcript)
 
     docs = [
@@ -39,5 +40,7 @@ def build_transcript_vector_store(
     return vector_store
 
 
-def create_transcript_retriever(vector_store: Chroma, k: int = 4):
-    return vector_store.as_retriever(search_type="similarity", search_kwargs={"k": k})
+def create_transcript_retriever(vector_store: Chroma, k: int = 8):
+    return vector_store.as_retriever(
+        search_type="mmr", search_kwargs={"k": k, "fetch_k": 20}
+    )
