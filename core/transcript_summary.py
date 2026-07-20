@@ -20,6 +20,19 @@ Rules:
 - Each bullet must be under 25 words.
 - Do not repeat similar points; merge overlapping observations into a single bullet.
 - Do not invent facts that are not present in the partial summaries.
+- Use objective, neutral language; do not add sentiment or editorializing that \
+isn't explicitly present in the partial summaries.
+
+If there are more than 5 distinct points, choose which 5 to keep using this \
+priority order (highest first):
+1. Decisions
+2. Actionable outcomes
+3. Facts / metrics
+4. Risks / blockers
+5. General discussion
+
+When two points have equal priority, keep the more specific one (the one with \
+concrete names, numbers, or details) over the more general one.
 
 Return ONLY a single valid JSON object with exactly one key, "summary", whose value \
 is an array of bullet strings. Do not include markdown code fences (no ```), \
@@ -102,7 +115,16 @@ def summarize_transcript(transcript: str) -> list:
     llm = create_llm()
     map_prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", "Summarize this portion of a meeting transcript concisely."),
+            (
+                "system",
+                "Summarize this portion of a meeting transcript concisely. "
+                "Preserve important names, numbers, dates, deadlines, metrics, "
+                "and decisions exactly as stated rather than paraphrasing them "
+                "away — later steps depend on these specifics surviving this "
+                "summary. Prefer specific statements over vague generalities. "
+                "Use objective, neutral language; do not add sentiment or "
+                "editorializing that isn't explicitly present in the transcript.",
+            ),
             ("human", "{text}"),
         ]
     )
@@ -141,8 +163,13 @@ def generate_meeting_title(transcript: str) -> str:
         [
             (
                 "system",
-                "Based on the meeting transcript, generate a short professional meeting title "
-                "(max 8 words). Only return the title, nothing else.",
+                "Based on the meeting transcript, generate a short, specific meeting "
+                "title (max 8 words) that names the actual subject discussed — the "
+                "project, product, or decision at the center of the meeting — rather "
+                "than a generic label like 'Team Meeting' or 'Project Discussion'. If "
+                "a dominant project or product name appears in the transcript, "
+                "include it in the title. Do not use quotation marks or a trailing "
+                "period. Only return the title, nothing else.",
             ),
             ("human", "{text}"),
         ]

@@ -34,17 +34,37 @@ Return ONLY a single valid JSON object. Do not include markdown code fences \
 The JSON object must have exactly these three keys:
 
 "action_items": an array of at most 5 objects, each with keys "task", "owner", "deadline".
-- "task": a short description of the action item.
-- "owner": the person responsible, or "Not specified" if unknown.
-- "deadline": the due date, or "Not specified" if unknown.
+- Only include items that are explicitly assigned to someone or explicitly agreed \
+upon in the transcript. Do not convert a suggestion, idea, or proposal into an \
+action item unless the transcript shows it was explicitly assigned or agreed to.
+- If multiple items refer to the same underlying task, merge them into a single \
+entry rather than listing them separately.
+- "task": a short, objective description of the action item.
+- "owner": the person responsible, exactly as stated in the transcript. Use \
+"Not specified" if no owner is explicitly named — never infer an owner from role, \
+tone, or context.
+- "deadline": the due date, exactly as stated in the transcript. Use "Not specified" \
+if no deadline is explicitly given — never infer a deadline.
+- Order items by priority: items with an explicit deadline or explicitly stated \
+urgency first, followed by other agreed items.
 - If there are no action items, return an empty array.
 
-"key_decisions": an array of at most 5 short strings, each describing one decision made.
+"key_decisions": an array of at most 5 short strings, each describing one decision \
+that the transcript explicitly frames as agreed or finalized.
+- Do not include proposals, suggestions, or options that were only discussed or \
+left open.
+- Do not list the same decision more than once even if it is phrased differently \
+in different parts of the transcript — merge these into a single entry.
 - If there are no decisions, return an empty array.
 
-"open_questions": an array of at most 5 short strings, each describing one unresolved \
-question, blocker, or follow-up.
+"open_questions": an array of at most 5 short strings, each describing one question, \
+blocker, or follow-up that remains unresolved by the end of the transcript.
+- Exclude questions that are answered later in the transcript and exclude rhetorical \
+questions that aren't genuine open items.
 - If there are none, return an empty array.
+
+Use objective, neutral language throughout; do not add sentiment or editorializing \
+that isn't explicitly present in the transcript.
 
 Do not invent facts that are not present in the transcript. Do not repeat the same \
 item twice; merge duplicate or overlapping items into one entry.
