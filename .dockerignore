@@ -1,0 +1,33 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Git
+.git/
+.gitignore
+
+# VS Code
+.vscode/
+
+# Environment variables
+.env
+
+# ChromaDB
+vector_db/
+
+# Temporary files
+.cache/
+.pytest_cache/
+
+# Audio/Video files
+*.mp3
+*.wav
+*.mp4
+*.mkv
+
+# OS files
+.DS_Store
+Thumbs.db

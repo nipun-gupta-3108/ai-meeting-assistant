@@ -8,11 +8,8 @@ pydub>=0.25.1
 # installed and on PATH — see README for install instructions.
 
 # ── Speech-to-Text (Whisper) ─────────────────────────────────────────────────
-openai-whisper>=20231117
 faster-whisper>=1.1.1
 torch>=2.2.0
-torchaudio>=2.2.0
-torchvision>=0.17.2
 
 # ── Hinglish Transcription (Sarvam AI) ───────────────────────────────────────
 requests>=2.32.0
