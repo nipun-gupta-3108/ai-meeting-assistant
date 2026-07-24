@@ -1,6 +1,7 @@
+import logging
 import uuid
 
-from utils.audio_preparation import prepare_audio_chunks
+from utils.audio_preparation import prepare_audio_chunks, cleanup_chunk_files
 from core.audio_transcription import transcribe_audio_chunks
 from core.transcript_summary import summarize_transcript, generate_meeting_title
 from core.transcript_insights import (
@@ -8,13 +9,22 @@ from core.transcript_insights import (
 )
 from core.transcript_qa import build_transcript_rag_chain
 
+logger = logging.getLogger(__name__)
+
 
 def run_meeting_assistant_pipeline(source: str, language: str = "english") -> dict:
-    print("Starting the AI meeting assistant...")
+    logger.info("Starting the AI meeting assistant...")
 
     chunks = prepare_audio_chunks(source)
 
-    transcript = transcribe_audio_chunks(chunks, language)
+    try:
+        transcript = transcribe_audio_chunks(chunks, language)
+    finally:
+        # Audio chunks are only needed for transcription; once this step
+        # has run (successfully or not), they can be removed regardless
+        # of how later pipeline stages (summary, insights, vector store)
+        # turn out.
+        cleanup_chunk_files(chunks)
 
     title = generate_meeting_title(transcript)
 
@@ -39,4 +49,5 @@ def run_meeting_assistant_pipeline(source: str, language: str = "english") -> di
         "key_decisions": decisions,
         "open_questions": questions,
         "rag_chain": rag_chain,
+        "collection_name": collection_name,
     }

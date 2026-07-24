@@ -1,9 +1,13 @@
-from faster_whisper import WhisperModel
+import logging
 import os
+
 import torch
 import requests
-from pydub import AudioSegment
 import streamlit as st
+from faster_whisper import WhisperModel
+from pydub import AudioSegment
+
+logger = logging.getLogger(__name__)
 
 # Sarvam's sync STT-translate API rejects audio longer than 30s.
 # We slice each chunk into 25s pieces (with a 5s safety margin) before sending.
@@ -24,7 +28,9 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 def load_whisper_model():
     compute_type = "float16" if device == "cuda" else "int8"
 
-    print(f"Loading Faster-Whisper ({WHISPER_MODEL}) on {device} ({compute_type})...")
+    logger.info(
+        "Loading Faster-Whisper (%s) on %s (%s)...", WHISPER_MODEL, device, compute_type
+    )
 
     model = WhisperModel(
         WHISPER_MODEL,
@@ -32,7 +38,7 @@ def load_whisper_model():
         compute_type=compute_type,
     )
 
-    print("Faster-Whisper model loaded.")
+    logger.info("Faster-Whisper model loaded.")
 
     return model
 
@@ -76,7 +82,9 @@ def _send_audio_piece_to_sarvam(piece_path: str) -> str:
     text = data.get("transcript")
 
     if text is None:
-        print("Warning: Sarvam response did not contain a transcript.")
+        logger.warning(
+            "Sarvam response did not contain a transcript for %s.", piece_path
+        )
         return ""
 
     return text
@@ -128,16 +136,16 @@ def transcribe_audio_chunks(chunks: list, language: str = "english") -> str:
     full_transcript = ""
 
     engine = "Sarvam AI" if language.lower() == "hinglish" else "Whisper"
-    print(f"Using {engine} for transcription.")
+    logger.info("Using %s for transcription.", engine)
 
     for i, chunk in enumerate(chunks):
 
-        print(f"Transcribing chunk {i + 1}/{len(chunks)}...")
+        logger.info("Transcribing chunk %d/%d...", i + 1, len(chunks))
 
         text = transcribe_audio_chunk(chunk, language=language)
 
         full_transcript += text + " "
 
-    print("Transcription complete.")
+    logger.info("Transcription complete.")
 
     return full_transcript.strip()

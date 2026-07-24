@@ -1,5 +1,5 @@
 import html
-import traceback
+import logging
 import uuid
 from pathlib import Path
 
@@ -8,8 +8,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from core.logging_config import configure_logging
+
+configure_logging()
+
 from core.pipeline import run_meeting_assistant_pipeline
 from core.transcript_qa import ask_transcript_question
+from core.transcript_vector_store import delete_collection, cleanup_stale_collections
+
+logger = logging.getLogger(__name__)
 
 APP_NAME = "AI Meeting Assistant"
 
@@ -110,6 +117,7 @@ def initialize_state():
         "pending_language": "english",
         "error_message": None,
         "input_mode": "YouTube URL",
+        "uploaded_temp_path": None,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -149,12 +157,6 @@ def render_landing():
         unsafe_allow_html=True,
     )
 
-    # Centering is done via CSS (max-width + margin:auto on .landing-headline,
-    # .landing-sub, .landing-footnote, and the bordered panel) rather than
-    # st.columns([1, 3, 1]). The old column split capped the panel at
-    # roughly 3/5 of the 760px block-container (~420-450px) no matter what
-    # padding/border CSS was applied to the panel itself — CSS centering
-    # removes that ceiling so the panel can reach its intended 640px width.
     st.markdown(
         '<p class="landing-headline">What meeting should we go through?</p>',
         unsafe_allow_html=True,
@@ -169,9 +171,6 @@ def render_landing():
         st.error(st.session_state.error_message)
 
     with st.container(border=True):
-        # Source mode lives in session_state and is switched by two real
-        # buttons (not st.radio + CSS), so it survives reruns correctly
-        # and never depends on Streamlit's internal DOM structure.
         toggle_col_a, toggle_col_b = st.columns(2)
         with toggle_col_a:
             if st.button(
@@ -198,8 +197,6 @@ def render_landing():
             ):
                 st.session_state.input_mode = "Upload file"
 
-        # Only the field for the CURRENT mode is rendered/read this run,
-        # so a leftover value from the other mode can never be submitted.
         source = ""
         uploaded_file = None
         if st.session_state.input_mode == "YouTube URL":
@@ -241,11 +238,15 @@ def render_landing():
                 st.warning("Upload an audio or video file before running analysis.")
                 return
             resolved_source = save_uploaded_file(uploaded_file)
+            # Track this as our own temp artifact so it can be cleaned up
+            # once the pipeline is done with it — see _cleanup_uploaded_temp_file.
+            st.session_state.uploaded_temp_path = resolved_source
         elif not source.strip():
             st.warning("Enter a YouTube URL before running analysis.")
             return
         else:
             resolved_source = source.strip()
+            st.session_state.uploaded_temp_path = None
 
         st.session_state.pending_source = resolved_source
         st.session_state.pending_language = (
@@ -255,6 +256,22 @@ def render_landing():
         st.session_state.chat_history = []
         st.session_state.processing = True
         st.rerun()
+
+
+def _cleanup_uploaded_temp_file():
+    """Remove the app's own temp copy of an uploaded file once the
+    pipeline is done with it (success or failure). Only ever targets a
+    path this app created via save_uploaded_file — never a YouTube URL,
+    and never a path the user typed directly."""
+    temp_path = st.session_state.get("uploaded_temp_path")
+    if not temp_path:
+        return
+    try:
+        Path(temp_path).unlink(missing_ok=True)
+        logger.debug("Removed uploaded temp file: %s", temp_path)
+    except OSError as exc:
+        logger.warning("Could not remove uploaded temp file %s: %s", temp_path, exc)
+    st.session_state.uploaded_temp_path = None
 
 
 def render_processing():
@@ -269,15 +286,23 @@ def render_processing():
                     st.session_state.pending_language,
                 )
             except Exception as exc:
-                traceback.print_exc()
+                # Full stack trace goes to the log; the user only sees a
+                # short, actionable message in the UI.
+                logger.exception(
+                    "Meeting analysis pipeline failed for source=%s language=%s",
+                    st.session_state.pending_source,
+                    st.session_state.pending_language,
+                )
                 st.session_state.processing = False
                 st.session_state.error_message = (
                     f"Analysis failed: {exc}. Please check your input or "
                     "API configuration and try again."
                 )
+                _cleanup_uploaded_temp_file()
                 st.rerun()
                 return
 
+        _cleanup_uploaded_temp_file()
         st.session_state.result = result
         st.session_state.processing = False
         st.rerun()
@@ -300,7 +325,11 @@ def render_chat(result: dict):
 
         with st.chat_message("assistant"):
             with st.spinner("Searching transcript..."):
-                answer = ask_transcript_question(result["rag_chain"], question)
+                try:
+                    answer = ask_transcript_question(result["rag_chain"], question)
+                except Exception as exc:
+                    logger.exception("Q&A failed for question: %s", question)
+                    answer = f"Sorry, I couldn't answer that: {exc}"
             st.markdown(answer)
         st.session_state.chat_history.append({"role": "assistant", "content": answer})
 
@@ -328,6 +357,12 @@ def render_export(result: dict):
 
 def render_workspace(result: dict):
     if st.button("← New meeting"):
+        # The RAG chain for this meeting is about to go out of scope for
+        # good — clean up its Chroma collection now rather than waiting
+        # for the next process's startup sweep.
+        collection_name = result.get("collection_name")
+        if collection_name:
+            delete_collection(collection_name)
         st.session_state.result = None
         st.session_state.chat_history = []
         st.session_state.error_message = None
@@ -373,8 +408,23 @@ def render_workspace(result: dict):
     render_export(result)
 
 
+@st.cache_resource
+def _cleanup_stale_collections_once():
+    # @st.cache_resource caches this call's result across the whole
+    # process (not per-session, not per-rerun) — the same mechanism the
+    # Whisper model loader already relies on. That guarantees the sweep
+    # runs at most once per process lifetime. Because the sweep itself
+    # only removes collections older than the stale-age threshold (see
+    # cleanup_stale_collections), it's also safe if multiple Streamlit
+    # processes/sessions are running at once — a concurrent session's
+    # collection is always too young to be touched.
+    cleanup_stale_collections()
+    return True
+
+
 def main():
     st.set_page_config(page_title=APP_NAME, page_icon="🎙️", layout="centered")
+    _cleanup_stale_collections_once()
     initialize_state()
     render_styles()
 
