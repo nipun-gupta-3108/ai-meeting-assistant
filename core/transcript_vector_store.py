@@ -136,10 +136,18 @@ def cleanup_stale_collections(
 
     cutoff = time.time() - (max_age_hours * 3600)
     removed = 0
+    skipped_unrecognized = 0
 
     for collection in collections:
         name = getattr(collection, "name", None)
         if not name:
+            # Canary: chromadb has changed list_collections()'s return type
+            # before (0.6.0-0.6.3 returned plain name strings instead of
+            # Collection objects), which would make every entry hit this
+            # branch and silently disable the sweep forever. Surface that
+            # here instead of failing silently — see requirements.txt for
+            # the version pin this guards against a regression of.
+            skipped_unrecognized += 1
             continue
 
         metadata = getattr(collection, "metadata", None) or {}
@@ -159,6 +167,16 @@ def cleanup_stale_collections(
         except Exception as exc:
             logger.warning("Could not remove stale collection %s: %s", name, exc)
 
+    if skipped_unrecognized:
+        logger.warning(
+            "Stale-collection sweep found %d collection entry(ies) without a "
+            "recognizable Collection object (no .name attribute) — the "
+            "installed chromadb version may have changed list_collections()'s "
+            "return type. The sweep is likely no longer able to detect stale "
+            "collections; check the chromadb version pin in requirements.txt.",
+            skipped_unrecognized,
+        )
+        
     if removed:
         logger.info("Stale-collection sweep removed %d collection(s).", removed)
     else:
