@@ -15,6 +15,10 @@ configure_logging()
 from core.pipeline import run_meeting_assistant_pipeline
 from core.transcript_qa import ask_transcript_question
 from core.transcript_vector_store import delete_collection, cleanup_stale_collections
+from utils.audio_preparation import (
+    DOWNLOAD_DIR,
+    cleanup_stale_temp_files,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -409,22 +413,30 @@ def render_workspace(result: dict):
 
 
 @st.cache_resource
-def _cleanup_stale_collections_once():
-    # @st.cache_resource caches this call's result across the whole
-    # process (not per-session, not per-rerun) — the same mechanism the
-    # Whisper model loader already relies on. That guarantees the sweep
-    # runs at most once per process lifetime. Because the sweep itself
-    # only removes collections older than the stale-age threshold (see
-    # cleanup_stale_collections), it's also safe if multiple Streamlit
-    # processes/sessions are running at once — a concurrent session's
-    # collection is always too young to be touched.
+def _cleanup_stale_artifacts_once():
+    """Run stale-artifact cleanup once per Streamlit process.
+
+    Chroma collections and filesystem temp artifacts use conservative
+    age-based cleanup so active sessions are not affected.
+
+    Only app-owned directories are swept:
+    - downloads/ contains files created by the YouTube processing path.
+    - uploads/ contains UUID-named copies created by save_uploaded_file().
+
+    Never point cleanup_stale_temp_files() at arbitrary user directories.
+    """
+
     cleanup_stale_collections()
+
+    cleanup_stale_temp_files(DOWNLOAD_DIR)
+    cleanup_stale_temp_files(str(UPLOAD_DIR))
+
     return True
 
 
 def main():
     st.set_page_config(page_title=APP_NAME, page_icon="🎙️", layout="centered")
-    _cleanup_stale_collections_once()
+    _cleanup_stale_artifacts_once()
     initialize_state()
     render_styles()
 
