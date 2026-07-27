@@ -1,6 +1,7 @@
 import html
 import logging
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 import streamlit as st
@@ -12,7 +13,7 @@ from core.logging_config import configure_logging
 
 configure_logging()
 
-from core.meeting_repository import initialize_database, save_meeting
+from core.meeting_repository import initialize_database, list_meetings, save_meeting
 from core.pipeline import run_meeting_assistant_pipeline
 from core.transcript_qa import ask_transcript_question
 from core.transcript_vector_store import delete_collection, cleanup_stale_collections
@@ -41,6 +42,20 @@ EMPTY_STATE_MESSAGES = {
 }
 
 SECTION_GAP = '<div style="height:2.25rem"></div>'
+
+# Maps the internal language code stored in the meetings table (set in
+# render_landing()'s pending_language) to the same user-facing labels
+# already used elsewhere in this file (e.g. st.session_state.language_label).
+LANGUAGE_DISPLAY_LABELS = {
+    "english": "English",
+    "hinglish": "Hinglish / Hindi",
+}
+
+# meeting_repository stores created_at via SQLite's datetime('now'), which
+# is UTC, formatted as "YYYY-MM-DD HH:MM:SS". This is the matching parse
+# format used to convert it for display — see format_history_timestamp().
+_CREATED_AT_STORAGE_FORMAT = "%Y-%m-%d %H:%M:%S"
+_CREATED_AT_DISPLAY_FORMAT = "%b %d, %Y %I:%M %p"
 
 
 def format_summary_bullets(bullets: list) -> str:
@@ -84,6 +99,31 @@ def format_string_list_for_export(items: list, empty_key: str) -> str:
     if not items:
         return EMPTY_STATE_MESSAGES[empty_key]
     return "\n".join(f"{i}. {item}" for i, item in enumerate(items, start=1))
+
+
+def format_history_timestamp(raw_created_at: str) -> str:
+    """Convert a stored UTC created_at string to a local-time display string.
+
+    meeting_repository writes created_at using SQLite's datetime('now'),
+    which is naive UTC text — never local time and never timezone-aware.
+    This parses it as UTC, converts to the machine's local timezone via
+    stdlib datetime.astimezone(), and formats it for display. The database
+    value itself is never modified.
+
+    Falls back to returning the raw string as-is if it doesn't match the
+    expected format, rather than raising and breaking the whole history list
+    over one malformed row.
+    """
+    if not raw_created_at:
+        return "Unknown time"
+
+    try:
+        naive_utc = datetime.strptime(raw_created_at, _CREATED_AT_STORAGE_FORMAT)
+        aware_utc = naive_utc.replace(tzinfo=timezone.utc)
+        local_dt = aware_utc.astimezone()  # no tz arg = convert to system local tz
+        return local_dt.strftime(_CREATED_AT_DISPLAY_FORMAT)
+    except (ValueError, TypeError):
+        return raw_created_at
 
 
 def save_uploaded_file(uploaded_file) -> str:
@@ -145,6 +185,68 @@ def render_insight_section(title: str, items: list, empty_key: str):
         )
     else:
         st.markdown(format_insight_items(items))
+
+
+def render_history_item(meeting: dict):
+    """Render one row of lightweight meeting metadata.
+
+    Only reads the fields list_meetings() actually returns (id, title,
+    language, word_count, created_at) — never transcript or insight
+    fields, which list_meetings() intentionally omits.
+
+    Title text is untrusted (it's LLM-generated, then user-persisted), so
+    it's passed to st.markdown/st.caption without unsafe_allow_html: both
+    render markdown text with HTML escaped by default, so a title
+    containing "<script>" or similar is displayed as literal text rather
+    than interpreted.
+    """
+    title = meeting.get("title") or "Untitled meeting"
+    language_label = LANGUAGE_DISPLAY_LABELS.get(
+        meeting.get("language"), meeting.get("language") or "Unknown language"
+    )
+    word_count = meeting.get("word_count", 0)
+    created_display = format_history_timestamp(meeting.get("created_at"))
+
+    with st.container(border=True):
+        st.markdown(f"**{title}**")
+        st.caption(f"{language_label} • {word_count} words • {created_display}")
+
+
+def render_meeting_history():
+    """Render the 'Meeting history' section on the landing screen.
+
+    Uses core.meeting_repository.list_meetings() only — never queries
+    sqlite3 directly — and never loads a full transcript just to show this
+    list. A repository read failure is logged in full and degrades to a
+    short inline message so the "Analyze a meeting" workflow above it stays
+    fully usable either way.
+    """
+    st.markdown(SECTION_GAP, unsafe_allow_html=True)
+    st.markdown(
+        '<p class="section-heading">Meeting history</p>', unsafe_allow_html=True
+    )
+
+    try:
+        meetings = list_meetings()
+    except Exception:
+        logger.exception("Failed to load meeting history.")
+        st.markdown(
+            '<p class="empty-state">Could not load meeting history right now.</p>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    if not meetings:
+        st.markdown(
+            '<p class="empty-state">No meetings analyzed yet.</p>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    # list_meetings() already orders newest-first (created_at DESC, id
+    # DESC); rendered in that same order without any re-sorting here.
+    for meeting in meetings:
+        render_history_item(meeting)
 
 
 def render_landing():
@@ -233,6 +335,8 @@ def render_landing():
         '<p class="landing-footnote">Supports YouTube links, MP3, MP4, WAV and M4A</p>',
         unsafe_allow_html=True,
     )
+
+    render_meeting_history()
 
     if run_clicked:
         st.session_state.error_message = None
