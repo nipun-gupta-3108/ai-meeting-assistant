@@ -12,6 +12,7 @@ from core.logging_config import configure_logging
 
 configure_logging()
 
+from core.meeting_repository import initialize_database, save_meeting
 from core.pipeline import run_meeting_assistant_pipeline
 from core.transcript_qa import ask_transcript_question
 from core.transcript_vector_store import delete_collection, cleanup_stale_collections
@@ -307,6 +308,25 @@ def render_processing():
                 return
 
         _cleanup_uploaded_temp_file()
+
+        # Persist immediately after a successful pipeline run, and only
+        # here. render_processing() runs exactly once per analysis: it is
+        # only entered while st.session_state.processing is True, and that
+        # flag is flipped to False a few lines below, before st.rerun().
+        # The next rerun sees st.session_state.result already set and takes
+        # the render_workspace() branch in main() instead — it never
+        # re-enters render_processing() (and therefore never re-runs this
+        # save) for the same pipeline result. A persistence failure here
+        # must not discard an otherwise successful analysis, so it's
+        # caught, logged, and surfaced as a null meeting_id rather than
+        # raised.
+        try:
+            meeting_id = save_meeting(result, st.session_state.pending_language)
+            result["meeting_id"] = meeting_id
+        except Exception:
+            logger.exception("Failed to save meeting to history database.")
+            result["meeting_id"] = None
+
         st.session_state.result = result
         st.session_state.processing = False
         st.rerun()
@@ -413,6 +433,18 @@ def render_workspace(result: dict):
 
 
 @st.cache_resource
+def _initialize_database_once():
+    """Create the meetings table once per Streamlit process.
+
+    initialize_database() itself is idempotent (CREATE TABLE IF NOT
+    EXISTS), but wrapping it in st.cache_resource avoids opening a
+    throwaway sqlite connection on every rerun.
+    """
+    initialize_database()
+    return True
+
+
+@st.cache_resource
 def _cleanup_stale_artifacts_once():
     """Run stale-artifact cleanup once per Streamlit process.
 
@@ -436,6 +468,7 @@ def _cleanup_stale_artifacts_once():
 
 def main():
     st.set_page_config(page_title=APP_NAME, page_icon="🎙️", layout="centered")
+    _initialize_database_once()
     _cleanup_stale_artifacts_once()
     initialize_state()
     render_styles()
