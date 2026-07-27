@@ -9,4 +9,6 @@ vector_db/
 
 .venv/
 
+data/
+
 .streamlit/secrets.toml
