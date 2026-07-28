@@ -13,7 +13,12 @@ from core.logging_config import configure_logging
 
 configure_logging()
 
-from core.meeting_repository import initialize_database, list_meetings, save_meeting
+from core.meeting_repository import (
+    get_meeting,
+    initialize_database,
+    list_meetings,
+    save_meeting,
+)
 from core.pipeline import run_meeting_assistant_pipeline
 from core.transcript_qa import ask_transcript_question
 from core.transcript_vector_store import delete_collection, cleanup_stale_collections
@@ -187,6 +192,40 @@ def render_insight_section(title: str, items: list, empty_key: str):
         st.markdown(format_insight_items(items))
 
 
+def _open_historical_meeting(meeting_id: int) -> None:
+    """Load one saved meeting from history into the workspace.
+
+    Only ever populates st.session_state.result with what get_meeting()
+    returns from SQLite — this never calls run_meeting_assistant_pipeline()
+    and never touches Chroma, so no vector store is built for a historical
+    meeting. The loaded dict has no "rag_chain" or "collection_name" key
+    (get_meeting() never returns those — see meeting_repository's module
+    docstring), and none is fabricated here. "is_historical" is a
+    UI-only marker added at this layer; it is never written back to SQLite.
+    """
+    try:
+        meeting = get_meeting(meeting_id)
+    except Exception:
+        logger.exception("Failed to load historical meeting %s.", meeting_id)
+        st.session_state.error_message = (
+            "Could not load that meeting right now. Please try again."
+        )
+        return
+
+    if meeting is None:
+        st.session_state.error_message = "That meeting could not be found."
+        return
+
+    meeting["is_historical"] = True
+
+    st.session_state.result = meeting
+    st.session_state.language_label = LANGUAGE_DISPLAY_LABELS.get(
+        meeting.get("language"), meeting.get("language") or "Unknown language"
+    )
+    st.session_state.chat_history = []
+    st.session_state.error_message = None
+
+
 def render_history_item(meeting: dict):
     """Render one row of lightweight meeting metadata.
 
@@ -207,9 +246,16 @@ def render_history_item(meeting: dict):
     word_count = meeting.get("word_count", 0)
     created_display = format_history_timestamp(meeting.get("created_at"))
 
+    meeting_id = meeting.get("id")
+
     with st.container(border=True):
         st.markdown(f"**{title}**")
         st.caption(f"{language_label} • {word_count} words • {created_display}")
+        if st.button(
+            "Open", key=f"open_meeting_{meeting_id}", use_container_width=True
+        ):
+            _open_historical_meeting(meeting_id)
+            st.rerun()
 
 
 def render_meeting_history():
@@ -484,10 +530,17 @@ def render_export(result: dict):
 
 
 def render_workspace(result: dict):
-    if st.button("← New meeting"):
+    is_historical = result.get("is_historical", False)
+    back_label = "← Back to history" if is_historical else "← New meeting"
+
+    if st.button(back_label):
         # The RAG chain for this meeting is about to go out of scope for
         # good — clean up its Chroma collection now rather than waiting
-        # for the next process's startup sweep.
+        # for the next process's startup sweep. A historical meeting never
+        # has a "collection_name" (get_meeting() never returns one, and
+        # _open_historical_meeting() never fabricates one), so this is
+        # simply a no-op for it rather than a call on a nonexistent
+        # collection.
         collection_name = result.get("collection_name")
         if collection_name:
             delete_collection(collection_name)
@@ -530,7 +583,21 @@ def render_workspace(result: dict):
         )
 
     st.markdown('<hr class="section-divider" />', unsafe_allow_html=True)
-    render_chat(result)
+    if is_historical:
+        # Saved meetings have no "rag_chain" (see meeting_repository's
+        # module docstring) — historical RAG reconstruction is deferred to
+        # a later milestone, so Q&A must not pretend to work here.
+        st.markdown(
+            '<p class="section-heading">Ask about this meeting</p>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            '<p class="empty-state">Q&amp;A is unavailable for saved meetings '
+            "right now.</p>",
+            unsafe_allow_html=True,
+        )
+    else:
+        render_chat(result)
 
     st.markdown('<hr class="section-divider" />', unsafe_allow_html=True)
     render_export(result)
