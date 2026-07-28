@@ -20,7 +20,7 @@ from core.meeting_repository import (
     save_meeting,
 )
 from core.pipeline import run_meeting_assistant_pipeline
-from core.transcript_qa import ask_transcript_question
+from core.transcript_qa import ask_transcript_question, format_sources_line
 from core.transcript_vector_store import delete_collection, cleanup_stale_collections
 from utils.audio_preparation import (
     DOWNLOAD_DIR,
@@ -490,6 +490,12 @@ def render_chat(result: dict):
     for message in st.session_state.chat_history:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
+            # Old chat-history entries (from before sources were tracked)
+            # simply have no "sources" key — .get() renders them exactly
+            # as before, with no citation line.
+            sources_line = format_sources_line(message.get("sources"))
+            if sources_line:
+                st.caption(sources_line)
 
     question = st.chat_input("Ask anything about this meeting...")
     if question:
@@ -500,12 +506,25 @@ def render_chat(result: dict):
         with st.chat_message("assistant"):
             with st.spinner("Searching transcript..."):
                 try:
-                    answer = ask_transcript_question(result["rag_chain"], question)
+                    qa_result = ask_transcript_question(result["rag_chain"], question)
+                    answer = qa_result["answer"]
+                    sources = qa_result["sources"]
                 except Exception as exc:
                     logger.exception("Q&A failed for question: %s", question)
                     answer = f"Sorry, I couldn't answer that: {exc}"
+                    sources = []
             st.markdown(answer)
-        st.session_state.chat_history.append({"role": "assistant", "content": answer})
+            sources_line = format_sources_line(sources)
+            if sources_line:
+                st.caption(sources_line)
+
+        # Sources are stored alongside the answer so that on the next
+        # Streamlit rerun (e.g. from a later chat_input submission),
+        # re-rendering this message from chat_history above does not need
+        # to invoke retrieval again — it just re-displays the same list.
+        st.session_state.chat_history.append(
+            {"role": "assistant", "content": answer, "sources": sources}
+        )
 
 
 def render_export(result: dict):

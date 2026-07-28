@@ -16,7 +16,7 @@ configure_logging()
 
 from core.meeting_repository import initialize_database, save_meeting
 from core.pipeline import run_meeting_assistant_pipeline
-from core.transcript_qa import ask_transcript_question
+from core.transcript_qa import ask_transcript_question, format_sources_line
 from core.transcript_vector_store import (
     cleanup_stale_collections,
     delete_collection,
@@ -102,7 +102,7 @@ if __name__ == "__main__":
                     continue
 
                 try:
-                    answer = ask_transcript_question(
+                    qa_result = ask_transcript_question(
                         rag_chain,
                         question,
                     )
@@ -117,7 +117,13 @@ if __name__ == "__main__":
 
                     continue
 
-                print(f"\nAssistant: {answer}\n")
+                print(f"\nAssistant: {qa_result['answer']}")
+
+                sources_line = format_sources_line(qa_result["sources"])
+                if sources_line:
+                    print(sources_line)
+
+                print()
 
         finally:
             # The RAG chain (and its Chroma collection) is about to go out
