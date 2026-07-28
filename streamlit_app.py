@@ -20,7 +20,11 @@ from core.meeting_repository import (
     save_meeting,
 )
 from core.pipeline import run_meeting_assistant_pipeline
-from core.transcript_qa import ask_transcript_question, format_sources_line
+from core.transcript_qa import (
+    ask_transcript_question,
+    ensure_rag_chain,
+    format_sources_line,
+)
 from core.transcript_vector_store import delete_collection, cleanup_stale_collections
 from utils.audio_preparation import (
     DOWNLOAD_DIR,
@@ -197,11 +201,16 @@ def _open_historical_meeting(meeting_id: int) -> None:
 
     Only ever populates st.session_state.result with what get_meeting()
     returns from SQLite — this never calls run_meeting_assistant_pipeline()
-    and never touches Chroma, so no vector store is built for a historical
-    meeting. The loaded dict has no "rag_chain" or "collection_name" key
-    (get_meeting() never returns those — see meeting_repository's module
-    docstring), and none is fabricated here. "is_historical" is a
-    UI-only marker added at this layer; it is never written back to SQLite.
+    and never touches Chroma, so no vector store is built just from
+    opening a meeting. The loaded dict has no "rag_chain" or
+    "collection_name" key at this point (get_meeting() never returns
+    those — see meeting_repository's module docstring), and none is
+    fabricated here.
+
+    Both keys are attached lazily, on demand, the first time the user asks
+    a question — see core.transcript_qa.ensure_rag_chain(), called from
+    render_chat(). "is_historical" is a UI-only marker added at this
+    layer; it is never written back to SQLite.
     """
     try:
         meeting = get_meeting(meeting_id)
@@ -483,6 +492,15 @@ def render_processing():
 
 
 def render_chat(result: dict):
+    """Render the Q&A panel for a meeting.
+
+    Works identically for freshly processed (live) meetings and meetings
+    reopened from history: neither this function nor its caller branches
+    on result.get("is_historical"). The only difference between the two
+    cases is invisible from here — whether result["rag_chain"] was
+    already set by core/pipeline.py, or gets attached lazily by
+    ensure_rag_chain() below the first time a question is asked.
+    """
     st.markdown(
         '<p class="section-heading">Ask about this meeting</p>', unsafe_allow_html=True
     )
@@ -512,6 +530,16 @@ def render_chat(result: dict):
         with st.chat_message("assistant"):
             with st.spinner("Searching transcript..."):
                 try:
+                    # No-op for live meetings (rag_chain already set by
+                    # core/pipeline.py). For a historical meeting, this is
+                    # where the vector store / retriever / chain actually
+                    # get built — on this, the first question, and never
+                    # again for this meeting. If building fails here,
+                    # result["rag_chain"] stays unset, so the next
+                    # question will simply retry rather than being stuck
+                    # in a broken state.
+                    ensure_rag_chain(result)
+
                     qa_result = ask_transcript_question(
                         result["rag_chain"],
                         question,
@@ -565,11 +593,11 @@ def render_workspace(result: dict):
     if st.button(back_label):
         # The RAG chain for this meeting is about to go out of scope for
         # good — clean up its Chroma collection now rather than waiting
-        # for the next process's startup sweep. A historical meeting never
-        # has a "collection_name" (get_meeting() never returns one, and
-        # _open_historical_meeting() never fabricates one), so this is
-        # simply a no-op for it rather than a call on a nonexistent
-        # collection.
+        # for the next process's startup sweep. A historical meeting only
+        # has a "collection_name" if a question was actually asked during
+        # this session (see ensure_rag_chain in core/transcript_qa.py); if
+        # none was asked, this is simply a no-op rather than a call on a
+        # nonexistent collection.
         collection_name = result.get("collection_name")
         if collection_name:
             delete_collection(collection_name)
@@ -612,21 +640,10 @@ def render_workspace(result: dict):
         )
 
     st.markdown('<hr class="section-divider" />', unsafe_allow_html=True)
-    if is_historical:
-        # Saved meetings have no "rag_chain" (see meeting_repository's
-        # module docstring) — historical RAG reconstruction is deferred to
-        # a later milestone, so Q&A must not pretend to work here.
-        st.markdown(
-            '<p class="section-heading">Ask about this meeting</p>',
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            '<p class="empty-state">Q&amp;A is unavailable for saved meetings '
-            "right now.</p>",
-            unsafe_allow_html=True,
-        )
-    else:
-        render_chat(result)
+    # Live and historical meetings now share the exact same Q&A code path.
+    # A historical meeting simply starts this call with no "rag_chain" yet
+    # — render_chat/ensure_rag_chain handle that transparently.
+    render_chat(result)
 
     st.markdown('<hr class="section-divider" />', unsafe_allow_html=True)
     render_export(result)

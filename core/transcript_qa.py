@@ -1,3 +1,5 @@
+import uuid
+
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
@@ -134,6 +136,49 @@ def build_transcript_rag_chain(transcript: str, collection_name: str):
     )
 
     return rag_chain
+
+
+def ensure_rag_chain(result: dict) -> dict:
+    """Lazily build and attach a conversational RAG chain to a meeting result.
+
+    Live meetings (returned by core/pipeline.py) already have "rag_chain"
+    and "collection_name" set at creation time, so this is a no-op for
+    them — the guard below returns immediately.
+
+    Historical meetings loaded via core/meeting_repository.get_meeting()
+    have neither key, since SQLite never stores runtime objects (see that
+    module's docstrings). The first time this is called for such a
+    meeting, it builds a fresh vector store from the already-persisted
+    transcript, wraps it in the exact same conversational RAG chain used
+    for live meetings, and attaches both "rag_chain" and "collection_name"
+    to `result` in place. Every later call for the same `result` object
+    sees "rag_chain" already set and returns immediately without
+    rebuilding anything — so this must be called on every question, but
+    only does real work on the first one.
+
+    The collection name uses a "history_" prefix (vs. pipeline.py's
+    "meeting_" prefix) purely so the two lifecycles are easy to tell apart
+    when inspecting logs or the Chroma directory — uniqueness itself comes
+    from the uuid4 suffix and holds regardless of prefix.
+
+    Callers remain responsible for eventually calling
+    core.transcript_vector_store.delete_collection() on
+    result["collection_name"] once the chain is no longer needed. The
+    existing "Back to history" / "New meeting" cleanup path in
+    streamlit_app.py already does this generically for any result that has
+    a "collection_name", so it covers both live and (once built)
+    historical meetings without modification.
+    """
+    if result.get("rag_chain") is not None:
+        return result
+
+    collection_name = f"history_{uuid.uuid4().hex}"
+    result["rag_chain"] = build_transcript_rag_chain(
+        result["transcript"], collection_name=collection_name
+    )
+    result["collection_name"] = collection_name
+
+    return result
 
 
 def _build_sources(source_documents) -> list:
