@@ -1,4 +1,5 @@
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import (
     RunnableLambda,
@@ -11,9 +12,77 @@ from core.transcript_vector_store import (
 )
 from core.llm_client import create_llm
 
+# Bounded conversational window: how many past chat messages (user +
+# assistant turns combined) are converted into LangChain messages and fed
+# into contextualization/answering. 6 messages = the last 3 user/assistant
+# exchanges.
+#
+# Unbounded history would grow the prompt — and Groq token usage — with
+# every turn, and would eventually push older, less-relevant turns ahead
+# of the transcript context itself in the model's attention. A small fixed
+# window keeps latency and cost predictable while still covering the
+# common "why?" / "who else?" follow-up pattern this feature targets. 6 is
+# a practical default, not derived from a specific benchmark on this
+# project — worth revisiting if real usage shows follow-ups reaching
+# further back than 3 exchanges.
+MAX_HISTORY_MESSAGES = 6
+
+CONTEXTUALIZE_SYSTEM_PROMPT = """Given a chat history and the latest user question, \
+rewrite the question, if needed, into a standalone question that can be understood \
+without the chat history. Do NOT answer the question — only reformulate it. If the \
+question is already standalone, return it unchanged. Return only the reformulated \
+question, with no explanation, quotes, or extra text."""
+
+ANSWER_SYSTEM_PROMPT = """You are a meeting Q&A assistant. Use only the transcript \
+context below to answer the user's question.
+
+If the transcript does not contain the answer, reply exactly:
+"I could not find this information in the meeting transcript."
+
+The conversation history is provided only to help you understand what a follow-up \
+question ("why?", "who else?", etc.) is referring to. Your answer must still be \
+grounded strictly in the transcript context below — never answer from the \
+conversation history alone.
+
+Keep the answer brief, specific, and grounded in the transcript. When you quote or \
+refer to a speaker's words, make that clear.
+
+Transcript context:
+{context}"""
+
 
 def format_retrieved_documents(docs):
     return "\n\n".join([doc.page_content for doc in docs])
+
+
+def _build_contextualize_chain(llm):
+    """Turns (chat_history, question) into a standalone question that no
+    longer depends on prior turns — e.g. "Why Friday?" becomes something
+    like "Why did Rahul choose Friday as the deadline?".
+
+    This rewritten question is used ONLY to drive retrieval. The answer is
+    still generated from the user's original, unmodified question (plus
+    chat_history), so the assistant's reply reads naturally rather than
+    echoing a robotic reformulation.
+    """
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", CONTEXTUALIZE_SYSTEM_PROMPT),
+            MessagesPlaceholder("chat_history"),
+            ("human", "{question}"),
+        ]
+    )
+    return prompt | llm | StrOutputParser()
+
+
+def _resolve_standalone_question(inputs: dict, contextualize_chain) -> str:
+    """Skip the extra LLM call entirely on a first turn (no chat_history),
+    since there is nothing to contextualize against yet. This keeps
+    single-turn Q&A exactly as fast/cheap as before this feature existed.
+    """
+    if not inputs.get("chat_history"):
+        return inputs["question"]
+    return contextualize_chain.invoke(inputs)
 
 
 def build_transcript_rag_chain(transcript: str, collection_name: str):
@@ -25,38 +94,33 @@ def build_transcript_rag_chain(transcript: str, collection_name: str):
     retriever = create_transcript_retriever(vector_store, k=4)
 
     llm = create_llm()
+    contextualize_chain = _build_contextualize_chain(llm)
 
-    prompt = ChatPromptTemplate.from_messages(
+    answer_prompt = ChatPromptTemplate.from_messages(
         [
-            (
-                "system",
-                """You are a meeting Q&A assistant. Use only the transcript context below to answer the user's question.
-
-If the transcript does not contain the answer, reply exactly:
-"I could not find this information in the meeting transcript."
-
-Keep the answer brief, specific, and grounded in the transcript. When you quote or refer to a speaker's words, make that clear.
-
-Transcript context:
-{context}""",
-            ),
+            ("system", ANSWER_SYSTEM_PROMPT),
+            MessagesPlaceholder("chat_history"),
             ("human", "{question}"),
         ]
     )
+    answer_chain = answer_prompt | llm | StrOutputParser()
 
-    # Same prompt/LLM/parser as before — this sub-chain's semantics are
-    # unchanged, only what wraps it has changed.
-    answer_chain = prompt | llm | StrOutputParser()
-
-    # Retrieval now happens exactly once per question, in this first stage.
-    # Both branches below reuse that single retrieval result, so the
-    # Documents used to build "context" for the LLM are the exact same
-    # Documents later surfaced to the caller as sources — no second
-    # retrieval is ever performed to produce citations.
+    # Retrieval now happens exactly once per question, using a standalone
+    # (history-resolved) version of the question. Both the answer step and
+    # the sources returned to the caller reuse this exact same retrieval
+    # result — no second retrieval is ever performed to produce citations.
     rag_chain = (
         RunnableParallel(
-            question=RunnablePassthrough(),
-            source_documents=retriever,
+            question=RunnableLambda(lambda x: x["question"]),
+            chat_history=RunnableLambda(lambda x: x.get("chat_history", [])),
+            standalone_question=RunnableLambda(
+                lambda x: _resolve_standalone_question(x, contextualize_chain)
+            ),
+        )
+        | RunnablePassthrough.assign(
+            source_documents=RunnableLambda(
+                lambda x: retriever.invoke(x["standalone_question"])
+            )
         )
         | RunnablePassthrough.assign(
             context=RunnableLambda(
@@ -135,10 +199,45 @@ def format_sources_line(sources: list) -> str:
     return "Sources: " + ", ".join(labels)
 
 
-def ask_transcript_question(rag_chain, question: str) -> dict:
+def _convert_chat_history_to_messages(chat_history: list) -> list:
+    """Convert the app's stored chat-history dicts
+    ({"role": "user"/"assistant", "content": str, ...}) into LangChain
+    message objects, applying the bounded window (MAX_HISTORY_MESSAGES).
+
+    Only "role" and "content" are read — extra keys such as the "sources"
+    list Streamlit stores alongside assistant turns are ignored here, so
+    callers can pass their stored dicts straight through unmodified.
+    Entries with an unrecognized role are skipped rather than raising.
+    """
+    messages = []
+    for turn in chat_history or []:
+        role = turn.get("role")
+        content = turn.get("content", "")
+        if role == "user":
+            messages.append(HumanMessage(content=content))
+        elif role == "assistant":
+            messages.append(AIMessage(content=content))
+
+    return messages[-MAX_HISTORY_MESSAGES:]
+
+
+def ask_transcript_question(
+    rag_chain, question: str, chat_history: list | None = None
+) -> dict:
     """Ask one question against a transcript's RAG chain.
 
-    Returns a small, framework-independent contract:
+    `chat_history`, if given, is the caller's own list of prior turns in
+    the app's stored dict format (see _convert_chat_history_to_messages).
+    It should NOT include the current `question` — only turns that came
+    before it.
+
+    Passing nothing (the default) reproduces the original single-turn
+    behavior exactly: with no chat_history, _resolve_standalone_question
+    skips contextualization entirely and retrieval runs on `question` as-is,
+    identical to this function's behavior before conversational memory was
+    added.
+
+    Returns the same contract as before:
 
         {
             "answer": <str>,
@@ -147,10 +246,11 @@ def ask_transcript_question(rag_chain, question: str) -> dict:
 
     "sources" always corresponds to the exact Documents used to generate
     "answer" for this call — no separate/second retrieval is performed to
-    produce it. This function is intentionally stateless: it has no
-    awareness of prior turns, matching current behavior exactly.
+    produce it.
     """
-    result = rag_chain.invoke(question)
+    messages = _convert_chat_history_to_messages(chat_history)
+
+    result = rag_chain.invoke({"question": question, "chat_history": messages})
 
     answer = result.get("answer", "") if isinstance(result, dict) else str(result)
     source_documents = (

@@ -90,6 +90,13 @@ if __name__ == "__main__":
 
         rag_chain = result["rag_chain"]
 
+        # Conversational memory for this session only: a plain in-memory
+        # list in the same {"role", "content"} dict shape the Streamlit app
+        # stores, so both callers feed ask_transcript_question() identical
+        # input. Windowing (last MAX_HISTORY_MESSAGES turns) is applied
+        # inside ask_transcript_question, not here.
+        chat_history = []
+
         try:
             while True:
                 question = input("You: ").strip()
@@ -105,6 +112,7 @@ if __name__ == "__main__":
                     qa_result = ask_transcript_question(
                         rag_chain,
                         question,
+                        chat_history=chat_history,
                     )
 
                 except Exception as exc:
@@ -117,13 +125,20 @@ if __name__ == "__main__":
 
                     continue
 
-                print(f"\nAssistant: {qa_result['answer']}")
+                answer = qa_result["answer"]
+                print(f"\nAssistant: {answer}")
 
                 sources_line = format_sources_line(qa_result["sources"])
                 if sources_line:
                     print(sources_line)
 
                 print()
+
+                # Only append after a successful turn, so a failed question
+                # (caught above) never pollutes the history sent to
+                # subsequent contextualization calls.
+                chat_history.append({"role": "user", "content": question})
+                chat_history.append({"role": "assistant", "content": answer})
 
         finally:
             # The RAG chain (and its Chroma collection) is about to go out

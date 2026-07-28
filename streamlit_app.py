@@ -499,6 +499,12 @@ def render_chat(result: dict):
 
     question = st.chat_input("Ask anything about this meeting...")
     if question:
+        # Snapshot the turns that came BEFORE this question. This is what
+        # gets sent to the RAG chain as conversational context — appending
+        # the new user turn below must not leak into its own
+        # contextualization input (a question can't be its own history).
+        history_for_chain = list(st.session_state.chat_history)
+
         st.session_state.chat_history.append({"role": "user", "content": question})
         with st.chat_message("user"):
             st.markdown(question)
@@ -506,7 +512,11 @@ def render_chat(result: dict):
         with st.chat_message("assistant"):
             with st.spinner("Searching transcript..."):
                 try:
-                    qa_result = ask_transcript_question(result["rag_chain"], question)
+                    qa_result = ask_transcript_question(
+                        result["rag_chain"],
+                        question,
+                        chat_history=history_for_chain,
+                    )
                     answer = qa_result["answer"]
                     sources = qa_result["sources"]
                 except Exception as exc:
