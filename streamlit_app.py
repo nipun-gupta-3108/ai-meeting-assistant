@@ -13,6 +13,12 @@ from core.logging_config import configure_logging
 
 configure_logging()
 
+from core.auth import (
+    AuthError,
+    ensure_users_table,
+    login,
+    signup,
+)
 from core.meeting_repository import (
     get_meeting,
     initialize_database,
@@ -190,6 +196,9 @@ def build_text_export(result: dict) -> str:
 
 def initialize_state():
     defaults = {
+        "current_user": None,
+        "auth_mode": "login",
+        "auth_error": None,
         "result": None,
         "chat_history": [],
         "language_label": "English",
@@ -208,6 +217,25 @@ def initialize_state():
 def render_styles():
     css = STYLE_PATH.read_text(encoding="utf-8")
     st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
+
+
+def render_brand_row():
+    """The small logo + app-name row shown at the top of the auth screen,
+    landing page, and workspace — factored out so all three stay
+    visually identical without copy-pasting the inline SVG three times."""
+    st.markdown(
+        '<div class="brand-row">'
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f8fafc" '
+        'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'
+        '<rect x="9" y="2" width="6" height="11" rx="3"></rect>'
+        '<path d="M5 10v1a7 7 0 0 0 14 0v-1"></path>'
+        '<line x1="12" y1="18" x2="12" y2="22"></line>'
+        '<line x1="8" y1="22" x2="16" y2="22"></line>'
+        "</svg>"
+        f'<span class="brand-name">{APP_NAME}</span>'
+        "</div>",
+        unsafe_allow_html=True,
+    )
 
 
 def render_hero_waveform():
@@ -245,8 +273,24 @@ def render_insight_section(title: str, items: list, empty_key: str):
         st.markdown(format_insight_items(items))
 
 
+def _current_user_id() -> str:
+    """Return the id of the signed-in user.
+
+    Every call site is only reached from render_landing()/render_workspace(),
+    both of which main() only renders once st.session_state.current_user is
+    set — so this is safe to call without a None check at each call site.
+    """
+    return st.session_state.current_user["id"]
+
+
 def _open_historical_meeting(meeting_id: int) -> None:
     """Load one saved meeting from history into the workspace.
+
+    Scoped to the signed-in user: get_meeting() requires both meeting_id
+    and the current user's id, and returns None for a meeting_id that
+    belongs to someone else — indistinguishable from "no such meeting" on
+    purpose (see that function's docstring). This is the enforcement point
+    that keeps one user from ever opening another user's meeting by id.
 
     Only ever populates st.session_state.result with what get_meeting()
     returns from SQLite — this never calls run_meeting_assistant_pipeline()
@@ -262,7 +306,7 @@ def _open_historical_meeting(meeting_id: int) -> None:
     layer; it is never written back to SQLite.
     """
     try:
-        meeting = get_meeting(meeting_id)
+        meeting = get_meeting(meeting_id, _current_user_id())
     except Exception:
         logger.exception("Failed to load historical meeting %s.", meeting_id)
         st.session_state.error_message = (
@@ -271,6 +315,9 @@ def _open_historical_meeting(meeting_id: int) -> None:
         return
 
     if meeting is None:
+        # Covers both "no such meeting" and "meeting belongs to another
+        # user" — same message either way, so no ownership information
+        # leaks through the UI.
         st.session_state.error_message = "That meeting could not be found."
         return
 
@@ -329,11 +376,11 @@ def render_history_item(meeting: dict):
 def render_meeting_history():
     """Render the 'Meeting history' section on the landing screen.
 
-    Uses core.meeting_repository.list_meetings() only — never queries
-    sqlite3 directly — and never loads a full transcript just to show this
-    list. A repository read failure is logged in full and degrades to a
-    short inline message so the "Analyze a meeting" workflow above it stays
-    fully usable either way.
+    Uses core.meeting_repository.list_meetings(), scoped to the signed-in
+    user — never queries sqlite3 directly, and never loads a full
+    transcript just to show this list. A repository read failure is
+    logged in full and degrades to a short inline message so the
+    "Analyze a meeting" workflow above it stays fully usable either way.
     """
     st.markdown(SECTION_GAP, unsafe_allow_html=True)
     st.markdown(
@@ -341,7 +388,7 @@ def render_meeting_history():
     )
 
     try:
-        meetings = list_meetings()
+        meetings = list_meetings(_current_user_id())
     except Exception:
         logger.exception("Failed to load meeting history.")
         st.markdown(
@@ -365,20 +412,147 @@ def render_meeting_history():
         render_history_item(meeting)
 
 
-def render_landing():
+def _logout():
+    """Clear all session state and return to the login screen.
+
+    Resets everything, not just current_user — an in-progress result,
+    chat_history, or pending upload from this session must never survive
+    into whichever session (same user re-logging-in, or a different user
+    on the same browser tab) comes next.
+    """
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+
+
+def render_user_bar():
+    """Small row showing the signed-in user's name and a logout control.
+
+    Rendered at the top of both the landing page and the workspace so
+    logout is reachable from anywhere in the app without a dedicated
+    settings page.
+    """
+    user = st.session_state.current_user
+
+    name_col, logout_col = st.columns([4, 1])
+    with name_col:
+        st.markdown(
+            f'<p class="user-bar">Signed in as {html.escape(user["name"])}</p>',
+            unsafe_allow_html=True,
+        )
+    with logout_col:
+        if st.button("Log out", key="logout_button", use_container_width=True):
+            _logout()
+            st.rerun()
+
+
+def render_login_form():
+    """Email/password login form. Validation messages come straight from
+    core.auth.login()'s AuthError — this function does no validation of
+    its own, matching the separation of concerns in core/auth.py."""
+    with st.form("login_form"):
+        email = st.text_input("Email")
+        password = st.text_input("Password", type="password")
+        submitted = st.form_submit_button(
+            "Log in", type="primary", use_container_width=True
+        )
+
+    if submitted:
+        try:
+            user = login(email, password)
+        except AuthError as exc:
+            st.session_state.auth_error = str(exc)
+        else:
+            st.session_state.current_user = user
+            st.session_state.auth_error = None
+            st.rerun()
+
+
+def render_signup_form():
+    """Name/email/password/confirm-password signup form.
+
+    On success the new user is logged in immediately (no separate login
+    step) — core.auth.signup() returns the same public user dict shape
+    login() does, so both paths set st.session_state.current_user
+    identically.
+    """
+    with st.form("signup_form"):
+        name = st.text_input("Name")
+        email = st.text_input("Email")
+        password = st.text_input("Password", type="password")
+        confirm_password = st.text_input("Confirm password", type="password")
+        submitted = st.form_submit_button(
+            "Create account", type="primary", use_container_width=True
+        )
+
+    if submitted:
+        try:
+            user = signup(name, email, password, confirm_password)
+        except AuthError as exc:
+            st.session_state.auth_error = str(exc)
+        else:
+            st.session_state.current_user = user
+            st.session_state.auth_error = None
+            st.rerun()
+
+
+def render_auth_screen():
+    """Render the login/signup gate shown whenever no user is signed in.
+
+    Mirrors the landing page's visual language (brand row, bordered
+    command-surface panel, same toggle pattern used for YouTube/Upload)
+    so the pre-login experience matches the rest of the app rather than
+    reading as a bolted-on afterthought. Nothing else in main() renders
+    until st.session_state.current_user is set.
+    """
+    render_brand_row()
+
     st.markdown(
-        '<div class="brand-row">'
-        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f8fafc" '
-        'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'
-        '<rect x="9" y="2" width="6" height="11" rx="3"></rect>'
-        '<path d="M5 10v1a7 7 0 0 0 14 0v-1"></path>'
-        '<line x1="12" y1="18" x2="12" y2="22"></line>'
-        '<line x1="8" y1="22" x2="16" y2="22"></line>'
-        "</svg>"
-        f'<span class="brand-name">{APP_NAME}</span>'
-        "</div>",
+        '<p class="landing-headline">Welcome back</p>',
         unsafe_allow_html=True,
     )
+    st.markdown(
+        '<p class="landing-sub">Sign in to analyze meetings and revisit '
+        "your history.</p>",
+        unsafe_allow_html=True,
+    )
+
+    if st.session_state.auth_error:
+        st.error(st.session_state.auth_error)
+
+    with st.container(border=True):
+        tab_col_a, tab_col_b = st.columns(2)
+        with tab_col_a:
+            if st.button(
+                "Log in",
+                type=(
+                    "primary" if st.session_state.auth_mode == "login" else "secondary"
+                ),
+                use_container_width=True,
+                key="select_auth_login",
+            ):
+                st.session_state.auth_mode = "login"
+                st.session_state.auth_error = None
+        with tab_col_b:
+            if st.button(
+                "Sign up",
+                type=(
+                    "primary" if st.session_state.auth_mode == "signup" else "secondary"
+                ),
+                use_container_width=True,
+                key="select_auth_signup",
+            ):
+                st.session_state.auth_mode = "signup"
+                st.session_state.auth_error = None
+
+        if st.session_state.auth_mode == "login":
+            render_login_form()
+        else:
+            render_signup_form()
+
+
+def render_landing():
+    render_user_bar()
+    render_brand_row()
 
     st.markdown(
         '<p class="landing-headline">What meeting should we go through?</p>',
@@ -533,18 +707,20 @@ def render_processing():
         _cleanup_uploaded_temp_file()
 
         # Persist immediately after a successful pipeline run, and only
-        # here. render_processing() runs exactly once per analysis: it is
-        # only entered while st.session_state.processing is True, and that
-        # flag is flipped to False a few lines below, before st.rerun().
-        # The next rerun sees st.session_state.result already set and takes
-        # the render_workspace() branch in main() instead — it never
-        # re-enters render_processing() (and therefore never re-runs this
-        # save) for the same pipeline result. A persistence failure here
-        # must not discard an otherwise successful analysis, so it's
-        # caught, logged, and surfaced as a null meeting_id rather than
-        # raised.
+        # here, scoped to the signed-in user. render_processing() runs
+        # exactly once per analysis: it is only entered while
+        # st.session_state.processing is True, and that flag is flipped to
+        # False a few lines below, before st.rerun(). The next rerun sees
+        # st.session_state.result already set and takes the
+        # render_workspace() branch in main() instead — it never re-enters
+        # render_processing() (and therefore never re-runs this save) for
+        # the same pipeline result. A persistence failure here must not
+        # discard an otherwise successful analysis, so it's caught,
+        # logged, and surfaced as a null meeting_id rather than raised.
         try:
-            meeting_id = save_meeting(result, st.session_state.pending_language)
+            meeting_id = save_meeting(
+                _current_user_id(), result, st.session_state.pending_language
+            )
             result["meeting_id"] = meeting_id
         except Exception:
             logger.exception("Failed to save meeting to history database.")
@@ -651,6 +827,8 @@ def render_export(result: dict):
 
 
 def render_workspace(result: dict):
+    render_user_bar()
+
     is_historical = result.get("is_historical", False)
     back_label = "← Back to history" if is_historical else "← New meeting"
 
@@ -715,12 +893,14 @@ def render_workspace(result: dict):
 
 @st.cache_resource
 def _initialize_database_once():
-    """Create the meetings table once per Streamlit process.
+    """Create the users and meetings tables once per Streamlit process.
 
-    initialize_database() itself is idempotent (CREATE TABLE IF NOT
-    EXISTS), but wrapping it in st.cache_resource avoids opening a
-    throwaway sqlite connection on every rerun.
+    Both initializers are idempotent (CREATE TABLE IF NOT EXISTS), but
+    wrapping them in st.cache_resource avoids opening throwaway sqlite
+    connections on every rerun. Users must be initialized first since
+    meetings.user_id references users(id).
     """
+    ensure_users_table()
     initialize_database()
     return True
 
@@ -753,6 +933,10 @@ def main():
     _cleanup_stale_artifacts_once()
     initialize_state()
     render_styles()
+
+    if not st.session_state.current_user:
+        render_auth_screen()
+        return
 
     if st.session_state.result:
         render_workspace(st.session_state.result)
