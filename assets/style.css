@@ -1,4 +1,17 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap");
+
+:root {
+  /* Landing/upload-scoped tokens only — the shared page background and
+     workspace (dashboard) colors below are left as hardcoded hex exactly
+     as before, so this redesign cannot shift anything outside the landing
+     and upload experience. */
+  --surface-hover: #1a2030;
+  --border-soft: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --accent: #7c8cf8;
+  --accent-soft: rgba(124, 140, 248, 0.35);
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
 
 .stApp {
   background: #0f172a;
@@ -26,9 +39,10 @@ h3 {
 /* Landing
    ─────────────────────────────────────────────────────────────────────────
    Shared 640px measure: .brand-row, .landing-headline, .landing-sub,
-   .landing-footnote, and the bordered panel below all share the same
-   max-width + margin:0 auto so their edges line up and the composition
-   reads as one grouped block rather than independently centered elements. */
+   .hero-waveform, .feature-chips, .landing-footnote, and the bordered panel
+   below all share the same max-width + margin:0 auto so their edges line up
+   and the composition reads as one grouped block rather than independently
+   centered elements. */
 .brand-row {
   display: flex;
   align-items: center;
@@ -52,10 +66,10 @@ h3 {
    !important on the two properties that matter locks it in without having
    to fight Streamlit's rule on every future release. */
 [data-testid="stMarkdownContainer"] p.landing-headline {
-  font-size: 40px !important;
+  font-size: 42px !important;
   line-height: 1.15 !important;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
   text-align: center;
   max-width: 640px;
   margin: 0 auto 14px;
@@ -68,11 +82,57 @@ h3 {
   color: #94a3b8;
   text-align: center;
   max-width: 460px;
+  margin: 0 auto 1.75rem;
+}
+
+/* Signature element — a thin, static waveform divider under the hero.
+   This is the one deliberate visual risk in the redesign (ties directly
+   to "audio in → structured text out"); everything else on the page stays
+   quiet by comparison, so this stays a plain divider, not an illustration:
+   no animation, low opacity, fixed small height. */
+.hero-waveform {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 18px;
+  margin: 0 auto 2rem;
+  opacity: 0.55;
+}
+
+.hero-waveform span {
+  display: block;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+
+/* Feature chips — a quiet, factual list of what the app actually does.
+   Static by design: these aren't buttons and don't do anything when
+   clicked, so no hover affordance is added — a hover state here would
+   imply interactivity that doesn't exist. */
+.feature-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: 640px;
   margin: 0 auto 2.75rem;
 }
 
+.feature-chip {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #94a3b8;
+  background: transparent;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  padding: 6px 14px;
+}
+
 [data-testid="stMarkdownContainer"] p.landing-footnote {
-  font-size: 13px !important;
+  font-size: 13px;
   color: #94a3b8;
   text-align: center;
   max-width: 640px;
@@ -87,15 +147,22 @@ h3 {
    width, and spacing. */
 [data-testid="stVerticalBlockBorderWrapper"] {
   background: #111827;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid var(--border-soft) !important;
   border-radius: 20px !important;
   max-width: 640px;
   margin: 0 auto;
   padding: 32px;
+  transition: border-color 0.15s ease;
+}
+
+[data-testid="stVerticalBlockBorderWrapper"]:focus-within {
+  border-color: var(--border-strong) !important;
 }
 
 /* Buttons — unscoped rule, applies app-wide (landing toggle/CTA, workspace
-   "New meeting" and download buttons) exactly as it did before. */
+   "New meeting" and download buttons) exactly as it did before. Left
+   untouched so the workspace/dashboard keeps its exact current look; all
+   new micro-interactions below are scoped to the landing panel only. */
 .stButton > button {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
@@ -123,20 +190,37 @@ h3 {
 }
 
 /* Landing panel buttons only (scoped under the bordered wrapper) — refines
-   the CTA's size/weight without touching buttons anywhere else in the app. */
+   the CTA's size/weight and adds micro-interactions (hover lift, focus
+   ring, pressed state) without touching buttons anywhere else in the app. */
 [data-testid="stVerticalBlockBorderWrapper"] .stButton > button {
   border-radius: 10px;
   padding: 12px 18px;
   transition:
     background-color 0.15s ease,
     border-color 0.15s ease,
-    color 0.15s ease;
+    color 0.15s ease,
+    transform 0.1s ease;
+}
+
+[data-testid="stVerticalBlockBorderWrapper"] .stButton > button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+[data-testid="stVerticalBlockBorderWrapper"] .stButton > button:active {
+  transform: translateY(1px);
 }
 
 [data-testid="stVerticalBlockBorderWrapper"]
   .stButton
   > button[kind="primary"] {
   font-weight: 600;
+}
+
+[data-testid="stVerticalBlockBorderWrapper"]
+  .stButton
+  > button[kind="primary"]:hover {
+  transform: translateY(-1px);
 }
 
 /* Source toggle (YouTube URL / Upload file) — the only buttons in the panel
@@ -150,6 +234,7 @@ h3 {
   padding: 9px 14px;
   font-size: 13.5px;
   font-weight: 500;
+  letter-spacing: 0.01em;
 }
 
 [data-testid="stVerticalBlockBorderWrapper"]
@@ -186,6 +271,9 @@ h3 {
   border-radius: 8px;
   padding: 12px 14px;
   color: #f8fafc;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 [data-testid="stTextInput"] input::placeholder {
@@ -193,8 +281,8 @@ h3 {
 }
 
 [data-testid="stTextInput"] input:focus {
-  border-color: rgba(248, 250, 252, 0.45);
-  box-shadow: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 /* Language select — Streamlit builds this on top of the third-party BaseWeb
@@ -207,6 +295,29 @@ h3 {
   border-radius: 8px !important;
   min-height: 40px !important;
   font-size: 14px !important;
+  transition: border-color 0.15s ease;
+}
+
+[data-testid="stSelectbox"]:focus-within [data-baseweb="select"] > div {
+  border-color: var(--accent) !important;
+}
+
+/* File uploader dropzone — restyled to match the panel's dark surface and
+   given a hover state so dragging a file over it reads as interactive.
+   Streamlit's own icon/copy inside are left as-is; only the container's
+   surface, border, and hover transition are changed. */
+[data-testid="stFileUploaderDropzone"] {
+  background: #0b1220;
+  border: 1.5px dashed rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+[data-testid="stFileUploaderDropzone"]:hover {
+  border-color: var(--accent-soft);
+  background: #0e1526;
 }
 
 /* Centered processing state */
@@ -221,7 +332,50 @@ h3 {
   justify-content: center;
 }
 
-/* Workspace document */
+/* Meeting history (part of the landing page) — icon + metadata row.
+   .history-meta is intentionally its own class rather than reusing
+   Streamlit's st.caption/stCaptionContainer, so this mono-font metadata
+   styling can never leak into the chat panel's source-citation captions
+   in the workspace, which are out of scope for this pass. */
+.history-item-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.history-item-title svg {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.history-meta {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 4px 0 0;
+}
+
+/* Landing-only empty state (meeting history list). Kept as its own class,
+   separate from the shared `.empty-state` used by the workspace's insight
+   sections, so this icon treatment stays scoped to the landing page. */
+.empty-state-landing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #94a3b8;
+  margin: 0;
+}
+
+.empty-state-landing svg {
+  flex-shrink: 0;
+  opacity: 0.5;
+}
+
+/* Workspace document — unchanged, dashboard redesign is a later phase */
 .workspace-h1 {
   font-size: 26px;
   font-weight: 500;
@@ -291,5 +445,14 @@ h3 {
 
   [data-testid="stVerticalBlockBorderWrapper"] {
     padding: 24px;
+  }
+
+  .feature-chips {
+    gap: 6px;
+  }
+
+  .feature-chip {
+    font-size: 12px;
+    padding: 5px 12px;
   }
 }

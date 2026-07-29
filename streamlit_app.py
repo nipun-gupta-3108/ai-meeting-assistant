@@ -66,6 +66,33 @@ LANGUAGE_DISPLAY_LABELS = {
 _CREATED_AT_STORAGE_FORMAT = "%Y-%m-%d %H:%M:%S"
 _CREATED_AT_DISPLAY_FORMAT = "%b %d, %Y %I:%M %p"
 
+# Feature chips shown under the hero. Each name maps directly to a capability
+# that is actually implemented (see README) — nothing here is aspirational.
+FEATURE_CHIPS = ["Audio", "Video", "YouTube", "AI Summary", "Chat"]
+
+# Small, self-contained Lucide-style icons used only on the landing page
+# (history rows, empty states). Kept as raw SVG strings rather than a
+# separate assets file since there are only two of them and both are tiny.
+_ICON_FILE_TEXT = (
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'
+    '<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>'
+    '<polyline points="14 2 14 8 20 8"></polyline>'
+    '<line x1="16" y1="13" x2="8" y2="13"></line>'
+    '<line x1="16" y1="17" x2="8" y2="17"></line>'
+    '<line x1="10" y1="9" x2="8" y2="9"></line>'
+    "</svg>"
+)
+
+_ICON_INBOX = (
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'
+    '<path d="M22 12h-6l-2 3h-4l-2-3H2"></path>'
+    '<path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 '
+    '16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>'
+    "</svg>"
+)
+
 
 def format_summary_bullets(bullets: list) -> str:
     """Render summary bullets (a list of strings) as markdown, matching the
@@ -183,6 +210,28 @@ def render_styles():
     st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
 
+def render_hero_waveform():
+    """Render the landing page's signature element: a thin, static waveform
+    divider under the hero text.
+
+    Deliberately a fixed set of bar heights (not random/animated) — this is
+    meant to read as a quiet divider, not an illustration or a loading
+    animation. See assets/style.css's .hero-waveform comment for rationale.
+    """
+    heights = [4, 8, 5, 12, 7, 14, 9, 16, 10, 14, 8, 12, 6, 10, 5, 8, 4]
+    bars = "".join(f'<span style="height:{h}px"></span>' for h in heights)
+    st.markdown(f'<div class="hero-waveform">{bars}</div>', unsafe_allow_html=True)
+
+
+def render_feature_chips():
+    """Render the quiet, factual capability chips under the hero."""
+    chips = "".join(
+        f'<span class="feature-chip">{html.escape(label)}</span>'
+        for label in FEATURE_CHIPS
+    )
+    st.markdown(f'<div class="feature-chips">{chips}</div>', unsafe_allow_html=True)
+
+
 def render_insight_section(title: str, items: list, empty_key: str):
     """Render one insights section, showing a quiet empty state when there
     are no items to display."""
@@ -242,11 +291,12 @@ def render_history_item(meeting: dict):
     language, word_count, created_at) — never transcript or insight
     fields, which list_meetings() intentionally omits.
 
-    Title text is untrusted (it's LLM-generated, then user-persisted), so
-    it's passed to st.markdown/st.caption without unsafe_allow_html: both
-    render markdown text with HTML escaped by default, so a title
-    containing "<script>" or similar is displayed as literal text rather
-    than interpreted.
+    Title and metadata are untrusted (title is LLM-generated, then
+    user-persisted; created_at can fall back to a raw stored string — see
+    format_history_timestamp). Both are explicitly html.escape()'d before
+    being interpolated into unsafe_allow_html markup, since this row now
+    builds its own HTML (icon + title, and a mono-font metadata line)
+    instead of relying on st.markdown's default escaping.
     """
     title = meeting.get("title") or "Untitled meeting"
     language_label = LANGUAGE_DISPLAY_LABELS.get(
@@ -258,8 +308,17 @@ def render_history_item(meeting: dict):
     meeting_id = meeting.get("id")
 
     with st.container(border=True):
-        st.markdown(f"**{title}**")
-        st.caption(f"{language_label} • {word_count} words • {created_display}")
+        st.markdown(
+            f'<div class="history-item-title">{_ICON_FILE_TEXT}'
+            f"{html.escape(title)}</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f'<p class="history-meta">'
+            f"{html.escape(language_label)} · {word_count} words · "
+            f"{html.escape(created_display)}</p>",
+            unsafe_allow_html=True,
+        )
         if st.button(
             "Open", key=f"open_meeting_{meeting_id}", use_container_width=True
         ):
@@ -286,14 +345,16 @@ def render_meeting_history():
     except Exception:
         logger.exception("Failed to load meeting history.")
         st.markdown(
-            '<p class="empty-state">Could not load meeting history right now.</p>',
+            f'<p class="empty-state-landing">{_ICON_INBOX}'
+            "Could not load meeting history right now.</p>",
             unsafe_allow_html=True,
         )
         return
 
     if not meetings:
         st.markdown(
-            '<p class="empty-state">No meetings analyzed yet.</p>',
+            f'<p class="empty-state-landing">{_ICON_INBOX}'
+            "No meetings analyzed yet.</p>",
             unsafe_allow_html=True,
         )
         return
@@ -328,6 +389,9 @@ def render_landing():
         "action items, and searchable Q&amp;A.</p>",
         unsafe_allow_html=True,
     )
+
+    render_hero_waveform()
+    render_feature_chips()
 
     if st.session_state.error_message:
         st.error(st.session_state.error_message)
@@ -383,7 +447,7 @@ def render_landing():
             )
 
         run_clicked = st.button(
-            "Analyze meeting", type="primary", use_container_width=True
+            "Analyze meeting  →", type="primary", use_container_width=True
         )
 
     st.markdown(
