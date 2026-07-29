@@ -2,7 +2,7 @@
 
 An AI-powered meeting assistant that transcribes meeting recordings, generates concise summaries, extracts meeting insights, and enables transcript-based question answering using Retrieval-Augmented Generation (RAG).
 
-Available as both a **CLI tool** and a **Streamlit web app**.
+Built as a **Streamlit web app**.
 
 ---
 
@@ -11,7 +11,7 @@ Available as both a **CLI tool** and a **Streamlit web app**.
 - **Flexible input** — process a YouTube URL or an uploaded local audio/video file.
 - **Automatic chunking** — audio is converted to mono 16kHz WAV and split into fixed-length chunks before transcription.
 - **Dual transcription engines**
-  - 🇬🇧 **English** → local [OpenAI Whisper](https://github.com/openai/whisper) model.
+  - 🇬🇧 **English** → local [Faster-Whisper](https://github.com/SYSTRAN/faster-whisper) model.
   - 🇮🇳 **Hinglish / Hindi** → [Sarvam AI](https://www.sarvam.ai/) speech-to-text-translate API (audio is further split into ≤30s pieces to satisfy the API's request limit).
 - **Meeting title generation** — a short, professional title generated from the transcript.
 - **Map-reduce summarization** — the transcript is chunked, summarized in parts, then combined into one final bullet-point summary.
@@ -19,8 +19,9 @@ Available as both a **CLI tool** and a **Streamlit web app**.
   - ✅ Action items (task, owner, deadline)
   - 📌 Key decisions
   - ❓ Open questions / follow-ups
-- **Retrieval-Augmented Q&A** — chat with the transcript using a Chroma vector store and sentence-embedding retrieval, answers grounded strictly in the transcript.
-- **Streamlit UI** — sidebar-driven workflow with Summary, Insights, Transcript, Chat, and Export tabs.
+- **Multi-turn RAG chat** — chat with the transcript using a Chroma vector store and sentence-embedding retrieval; follow-up questions are contextualized against chat history, and answers cite the transcript chunks they're grounded in.
+- **Meeting history** — completed analyses are persisted to SQLite per user and can be reopened later, with chat rebuilt on demand.
+- **User accounts** — email/password signup and login, so each user's meeting history is private to them.
 - **Text export** — download the full analysis or raw transcript as a `.txt` file.
 
 ---
@@ -75,15 +76,21 @@ Available as both a **CLI tool** and a **Streamlit web app**.
 .
 ├── core/
 │   ├── audio_transcription.py     # Whisper + Sarvam transcription logic
-│   ├── llm_client.py               # Groq LLM client factory
-│   ├── transcript_summary.py       # Map-reduce summarization + title generation
-│   ├── transcript_insights.py      # Action items / decisions / open questions
-│   ├── transcript_qa.py            # RAG chain construction and Q&A
-│   └── transcript_vector_store.py  # Chroma vector store creation & retrieval
+│   ├── auth.py                    # Signup/login business logic, password hashing
+│   ├── llm_client.py              # Groq LLM client factory
+│   ├── logging_config.py          # Centralized logging setup
+│   ├── meeting_repository.py      # SQLite persistence for completed meetings
+│   ├── pipeline.py                # End-to-end pipeline orchestration
+│   ├── transcript_summary.py      # Map-reduce summarization + title generation
+│   ├── transcript_insights.py     # Action items / decisions / open questions
+│   ├── transcript_qa.py           # RAG chain construction and Q&A
+│   ├── transcript_vector_store.py # Chroma vector store creation & retrieval
+│   └── user_repository.py         # SQLite persistence for user accounts
 ├── utils/
-│   └── audio_preparation.py        # Download, convert, and chunk audio
-├── meeting_assistant_cli.py        # CLI entry point / pipeline orchestration
-├── streamlit_app.py                # Streamlit web interface
+│   └── audio_preparation.py       # Download, convert, and chunk audio
+├── assets/
+│   └── style.css                  # Streamlit UI theming
+├── streamlit_app.py                # Application entry point
 ├── requirements.txt
 └── .gitignore
 ```
@@ -92,14 +99,16 @@ Available as both a **CLI tool** and a **Streamlit web app**.
 
 ## 🛠️ Tech Stack
 
-| Layer            | Technology                                      |
-|-------------------|-------------------------------------------------|
-| Audio acquisition | `yt-dlp`, `pydub`, `ffmpeg`                      |
-| Transcription     | `openai-whisper` (local), Sarvam AI API          |
-| LLM               | Groq (`langchain-groq`, `llama-3.3-70b-versatile`) |
-| Orchestration     | LangChain (LCEL chains)                          |
+| Layer             | Technology                                                               |
+| ----------------- | ------------------------------------------------------------------------ |
+| Audio acquisition | `yt-dlp`, `pydub`, `ffmpeg`                                              |
+| Transcription     | `faster-whisper` (local), Sarvam AI API                                  |
+| LLM               | Groq (`langchain-groq`, `llama-3.3-70b-versatile`)                       |
+| Orchestration     | LangChain (LCEL chains)                                                  |
 | Vector search     | ChromaDB + `langchain-huggingface` embeddings (`BAAI/bge-small-en-v1.5`) |
-| Web UI            | Streamlit                                        |
+| Persistence       | SQLite (meeting history, user accounts)                                  |
+| Auth              | `bcrypt` password hashing                                                |
+| Web UI            | Streamlit                                                                |
 
 ---
 
@@ -141,19 +150,11 @@ SARVAM_STT_MODEL=saaras:v2.5
 
 ## ▶️ Running Locally
 
-**CLI:**
-
-```bash
-python meeting_assistant_cli.py
-```
-You'll be prompted for a YouTube URL (or local file path) and a language (`english` / `hinglish`). After processing, an interactive Q&A prompt lets you ask questions about the transcript.
-
-**Streamlit web app:**
-
 ```bash
 streamlit run streamlit_app.py
 ```
-Use the sidebar to choose an input source and language, run the analysis, then explore the Summary, Insights, Transcript, Chat, and Export tabs.
+
+Sign up or log in, then use the landing page to choose an input source (YouTube URL or file upload) and language. After processing, the workspace shows the meeting summary, action items, key decisions, open questions, full transcript, and a chat panel for asking questions about the transcript. Past meetings are available from the "Meeting history" list and can be reopened at any time.
 
 ---
 
@@ -161,15 +162,14 @@ Use the sidebar to choose an input source and language, run the analysis, then e
 
 > _Add screenshots or a short demo GIF of the Streamlit app here._
 
-| Home / Empty State | Summary & Insights | Chat |
-|---|---|---|
+| Home / Empty State           | Summary & Insights              | Chat                         |
+| ---------------------------- | ------------------------------- | ---------------------------- |
 | `assets/screenshot-home.png` | `assets/screenshot-summary.png` | `assets/screenshot-chat.png` |
 
 ---
 
 ## 🔭 Future Improvements
 
-- Persist and reload past sessions instead of recomputing per run.
 - Speaker-level timestamps for easier navigation through the transcript.
 - PDF export of the full meeting report.
 - Batch processing for multiple files/URLs in one run.
