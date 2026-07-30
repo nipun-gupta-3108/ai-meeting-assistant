@@ -649,6 +649,7 @@ def render_auth_screen():
             ):
                 st.session_state.auth_mode = "login"
                 st.session_state.auth_error = None
+                st.rerun()
         with tab_col_b:
             if st.button(
                 "Sign up",
@@ -660,6 +661,7 @@ def render_auth_screen():
             ):
                 st.session_state.auth_mode = "signup"
                 st.session_state.auth_error = None
+                st.rerun()
 
         st.markdown('<div class="form-spacer"></div>', unsafe_allow_html=True)
 
@@ -705,6 +707,7 @@ def render_landing():
                 key="select_mode_url",
             ):
                 st.session_state.input_mode = "YouTube URL"
+                st.rerun()
         with toggle_col_b:
             if st.button(
                 "Upload file",
@@ -717,6 +720,7 @@ def render_landing():
                 key="select_mode_upload",
             ):
                 st.session_state.input_mode = "Upload file"
+                st.rerun()
 
         source = ""
         uploaded_file = None
