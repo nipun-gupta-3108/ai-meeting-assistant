@@ -424,6 +424,11 @@ def _open_historical_meeting(meeting_id: int) -> None:
 
     meeting["is_historical"] = True
 
+    logger.info(
+        "Opened meeting %s from history.",
+        meeting_id,
+    )
+
     st.session_state.result = meeting
     st.session_state.language_label = LANGUAGE_DISPLAY_LABELS.get(
         meeting.get("language"), meeting.get("language") or "Unknown language"
@@ -493,7 +498,7 @@ def render_meeting_history():
     """
     st.markdown(SECTION_GAP, unsafe_allow_html=True)
     st.markdown(
-        '<p class="section-heading">Meeting history</p>', unsafe_allow_html=True
+        '<p class="section-heading">Recent Analyses</p>', unsafe_allow_html=True
     )
 
     try:
@@ -529,6 +534,8 @@ def _logout():
     into whichever session (same user re-logging-in, or a different user
     on the same browser tab) comes next.
     """
+    logger.info("User logged out.")
+
     for key in list(st.session_state.keys()):
         del st.session_state[key]
 
@@ -678,7 +685,7 @@ def render_landing():
     render_brand_row()
 
     st.markdown(
-        '<p class="landing-headline">What meeting should we go through?</p>',
+        '<p class="landing-headline">Analyze your meeting</p>',
         unsafe_allow_html=True,
     )
     st.markdown(
@@ -750,7 +757,7 @@ def render_landing():
         )
 
     st.markdown(
-        '<p class="landing-footnote">Supports YouTube links, MP3, MP4, WAV and M4A</p>',
+        '<p class="landing-footnote">Supports YouTube, MP3, MP4, WAV, M4A</p>',
         unsafe_allow_html=True,
     )
 
@@ -785,6 +792,13 @@ def render_landing():
         st.session_state.pending_language = (
             "hinglish" if language_label == "Hinglish / Hindi" else "english"
         )
+
+        logger.info(
+            "Starting analysis (mode=%s, language=%s).",
+            input_mode,
+            st.session_state.pending_language,
+        )
+
         st.session_state.language_label = language_label
         st.session_state.chat_history = []
         st.session_state.processing = True
