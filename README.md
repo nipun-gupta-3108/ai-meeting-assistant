@@ -1,34 +1,137 @@
 # 🎙️ AI Meeting Assistant
 
-An AI-powered meeting assistant that transcribes meeting recordings, generates concise summaries, extracts meeting insights, and enables transcript-based question answering using Retrieval-Augmented Generation (RAG).
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-Web%20App-FF4B4B?logo=streamlit&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green)
+![LangChain](https://img.shields.io/badge/LangChain-LCEL-blue)
+![ChromaDB](https://img.shields.io/badge/Vector%20DB-ChromaDB-purple)
 
-Built as a **Streamlit web app**.
+An AI-powered meeting assistant that transcribes meeting recordings, generates concise summaries, extracts structured meeting insights, and enables transcript-based question answering using Retrieval-Augmented Generation (RAG).
+
+Built as a **Streamlit web application** using **LangChain**, **Groq**, **Faster-Whisper**, **Sarvam AI**, and **ChromaDB**.
+
+---
+
+## 🎥 Demo
+
+> Add a short demo GIF or video here.
+
+Example:
+
+```
+assets/demo.gif
+```
+
+or
+
+```
+https://github.com/user-attachments/...
+```
 
 ---
 
 ## ✨ Features
 
-- **Flexible input** — process a YouTube URL or an uploaded local audio/video file.
-- **Automatic chunking** — audio is converted to mono 16kHz WAV and split into fixed-length chunks before transcription.
-- **Dual transcription engines**
-  - 🇬🇧 **English** → local [Faster-Whisper](https://github.com/SYSTRAN/faster-whisper) model.
-  - 🇮🇳 **Hinglish / Hindi** → [Sarvam AI](https://www.sarvam.ai/) speech-to-text-translate API (audio is further split into ≤30s pieces to satisfy the API's request limit).
-- **Meeting title generation** — a short, professional title generated from the transcript.
-- **Map-reduce summarization** — the transcript is chunked, summarized in parts, then combined into one final bullet-point summary.
-- **Structured insight extraction**
-  - ✅ Action items (task, owner, deadline)
-  - 📌 Key decisions
-  - ❓ Open questions / follow-ups
-- **Multi-turn RAG chat** — chat with the transcript using a Chroma vector store and sentence-embedding retrieval; follow-up questions are contextualized against chat history, and answers cite the transcript chunks they're grounded in.
-- **Meeting history** — completed analyses are persisted to SQLite per user and can be reopened later, with chat rebuilt on demand.
-- **User accounts** — email/password signup and login, so each user's meeting history is private to them.
-- **Text export** — download the full analysis or raw transcript as a `.txt` file.
+### 🎧 Flexible Input
+
+- Process a **YouTube URL**
+- Upload a local **audio/video file**
+
+### 📝 Automatic Audio Processing
+
+- Converts audio to **mono 16kHz WAV**
+- Automatically splits long recordings into manageable chunks
+
+### 🎤 Dual Transcription Engines
+
+#### 🇬🇧 English
+
+- Local Faster-Whisper model
+
+#### 🇮🇳 Hinglish / Hindi
+
+- Sarvam AI Speech-to-Text API
+- Automatically splits audio into ≤30 second segments to satisfy API limits
+
+### 📰 AI Meeting Summary
+
+- Automatic meeting title generation
+- Map-reduce summarization pipeline
+- Clean bullet-point summaries
+
+### 📌 Structured Meeting Insights
+
+Extracts:
+
+- ✅ Action Items
+- 📌 Key Decisions
+- ❓ Open Questions
+
+### 💬 Multi-turn RAG Chat
+
+- Ask questions about the transcript
+- Context-aware follow-up conversations
+- Transcript chunk citations
+- Chroma vector search
+
+### 🗂️ Meeting History
+
+- SQLite persistence
+- User-specific history
+- Reopen previous analyses
+- Lazy RAG reconstruction
+
+### 🔐 Authentication
+
+- Email/password signup
+- Secure bcrypt password hashing
+- Private meeting history
+
+### 📄 Export
+
+Download:
+
+- Full meeting analysis
+- Raw transcript
 
 ---
 
-## 🏗️ Architecture
+# 🔄 Pipeline Flow
 
 ```
+YouTube URL / Audio File
+          │
+          ▼
+ Audio Preparation
+          │
+          ▼
+   Audio Chunking
+          │
+          ▼
+  Speech Transcription
+          │
+          ▼
+  Full Transcript
+          │
+ ┌────────┼─────────┐
+ ▼        ▼         ▼
+Title   Summary  Insights
+                  │
+                  ▼
+          Vector Store
+                  │
+                  ▼
+          Transcript Chat
+                  │
+                  ▼
+       SQLite Persistence
+```
+
+---
+
+# 🏗️ Architecture
+
+```text
                  ┌──────────────────────┐
                  │  YouTube URL /       │
                  │  Local audio-video   │
@@ -45,8 +148,7 @@ Built as a **Streamlit web app**.
                             ▼
                  ┌──────────────────────┐
                  │   Transcription      │
-                 │ Whisper  |  Sarvam AI│
-                 │ (English)|(Hinglish) │
+                 │ Whisper  | Sarvam AI │
                  └──────────┬───────────┘
                             │
                             ▼
@@ -56,134 +158,158 @@ Built as a **Streamlit web app**.
               ┌─────────────┼─────────────┐
               ▼             ▼             ▼
       ┌───────────┐ ┌───────────────┐ ┌────────────────┐
-      │  Summary  │ │    Insights   │ │  Vector Store  │
-      │ (Groq LLM,│ │ (Action items,│ │ (Chroma +      │
-      │ map-reduce)│ │ decisions,   │ │ HF embeddings) │
-      └───────────┘ │ questions)    │ └────────┬───────┘
-                     └───────────────┘          │
-                                                 ▼
-                                        ┌──────────────────┐
-                                        │  RAG Q&A Chain   │
-                                        │  (Groq LLM)      │
-                                        └──────────────────┘
+      │ Summary   │ │ Insights      │ │ Vector Store   │
+      └───────────┘ └───────────────┘ └────────┬───────┘
+                                               │
+                                               ▼
+                                      ┌────────────────┐
+                                      │ RAG Q&A Chain  │
+                                      └────────────────┘
 ```
 
 ---
 
-## 📁 Project Structure
+# 📁 Project Structure
 
-```
+```text
 .
 ├── core/
-│   ├── audio_transcription.py     # Whisper + Sarvam transcription logic
-│   ├── auth.py                    # Signup/login business logic, password hashing
-│   ├── llm_client.py              # Groq LLM client factory
-│   ├── logging_config.py          # Centralized logging setup
-│   ├── meeting_repository.py      # SQLite persistence for completed meetings
-│   ├── pipeline.py                # End-to-end pipeline orchestration
-│   ├── transcript_summary.py      # Map-reduce summarization + title generation
-│   ├── transcript_insights.py     # Action items / decisions / open questions
-│   ├── transcript_qa.py           # RAG chain construction and Q&A
-│   ├── transcript_vector_store.py # Chroma vector store creation & retrieval
-│   └── user_repository.py         # SQLite persistence for user accounts
+│   ├── audio_transcription.py
+│   ├── auth.py
+│   ├── llm_client.py
+│   ├── logging_config.py
+│   ├── meeting_repository.py
+│   ├── pipeline.py
+│   ├── transcript_summary.py
+│   ├── transcript_insights.py
+│   ├── transcript_qa.py
+│   ├── transcript_vector_store.py
+│   └── user_repository.py
+│
 ├── utils/
-│   └── audio_preparation.py       # Download, convert, and chunk audio
+│   └── audio_preparation.py
+│
 ├── assets/
-│   └── style.css                  # Streamlit UI theming
-├── streamlit_app.py                # Application entry point
+│   └── style.css
+│
+├── streamlit_app.py
 ├── requirements.txt
 └── .gitignore
 ```
 
 ---
 
-## 🛠️ Tech Stack
+# 🛠️ Tech Stack
 
-| Layer             | Technology                                                               |
-| ----------------- | ------------------------------------------------------------------------ |
-| Audio acquisition | `yt-dlp`, `pydub`, `ffmpeg`                                              |
-| Transcription     | `faster-whisper` (local), Sarvam AI API                                  |
-| LLM               | Groq (`langchain-groq`, `llama-3.3-70b-versatile`)                       |
-| Orchestration     | LangChain (LCEL chains)                                                  |
-| Vector search     | ChromaDB + `langchain-huggingface` embeddings (`BAAI/bge-small-en-v1.5`) |
-| Persistence       | SQLite (meeting history, user accounts)                                  |
-| Auth              | `bcrypt` password hashing                                                |
-| Web UI            | Streamlit                                                                |
+| Layer              | Technology                |
+| ------------------ | ------------------------- |
+| Frontend           | Streamlit                 |
+| Audio Processing   | yt-dlp, FFmpeg, pydub     |
+| Speech Recognition | Faster-Whisper, Sarvam AI |
+| LLM                | Groq (Llama 3.3 70B)      |
+| AI Framework       | LangChain (LCEL)          |
+| Vector Database    | ChromaDB                  |
+| Embeddings         | BAAI/bge-small-en-v1.5    |
+| Authentication     | bcrypt                    |
+| Database           | SQLite                    |
 
 ---
 
-## 🚀 Installation
+# 🚀 Installation
+
+> **Python 3.11 or newer is recommended.**
 
 ```bash
-# 1. Clone the repository
 git clone https://github.com/nipun-gupta-3108/ai-meeting-assistant.git
+
 cd ai-meeting-assistant
 
-# 2. Create and activate a virtual environment
 python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
 
-# 3. Install dependencies
+# Linux / macOS
+source .venv/bin/activate
+
+# Windows
+.venv\Scripts\activate
+
 pip install -r requirements.txt
 
-# 4. Make sure FFmpeg is installed and on your PATH
 ffmpeg -version
 ```
 
 ---
 
-## 🔑 Environment Variables
+# 🔑 Environment Variables
 
-Create a `.env` file in the project root:
+Create a `.env` file:
 
 ```env
-GROQ_API_KEY=your_groq_api_key
-SARVAM_API_KEY=your_sarvam_api_key      # only required for Hinglish/Hindi transcription
+# Required
 
-# Optional overrides
-WHISPER_MODEL=small                     # tiny / base / small / medium / large
+GROQ_API_KEY=
+
+# Required only for Hinglish / Hindi transcription
+
+SARVAM_API_KEY=
+
+# Optional
+
+WHISPER_MODEL=small
+
 LLM_MODEL=llama-3.3-70b-versatile
+
 SARVAM_STT_MODEL=saaras:v2.5
 ```
 
 ---
 
-## ▶️ Running Locally
+# ▶️ Running
 
 ```bash
 streamlit run streamlit_app.py
 ```
 
-Sign up or log in, then use the landing page to choose an input source (YouTube URL or file upload) and language. After processing, the workspace shows the meeting summary, action items, key decisions, open questions, full transcript, and a chat panel for asking questions about the transcript. Past meetings are available from the "Meeting history" list and can be reopened at any time.
+Workflow:
+
+1. Sign up or log in
+2. Select YouTube URL or File Upload
+3. Choose language
+4. Analyze the meeting
+5. Review summary and insights
+6. Chat with the transcript
+7. Export the report
+8. Reopen previous meetings anytime
 
 ---
 
-## 🖼️ Screenshots
+# 🖼️ Screenshots
 
-> _Add screenshots or a short demo GIF of the Streamlit app here._
-
-| Home / Empty State           | Summary & Insights              | Chat                         |
-| ---------------------------- | ------------------------------- | ---------------------------- |
-| `assets/screenshot-home.png` | `assets/screenshot-summary.png` | `assets/screenshot-chat.png` |
+| Home           | Summary        | Chat           |
+| -------------- | -------------- | -------------- |
+| Add Screenshot | Add Screenshot | Add Screenshot |
 
 ---
 
-## 🔭 Future Improvements
+# 🔮 Future Improvements
 
-- Speaker-level timestamps for easier navigation through the transcript.
-- PDF export of the full meeting report.
-- Batch processing for multiple files/URLs in one run.
-- Automated tests for the transcription and RAG pipelines.
-
----
-
-## 📄 License
-
-This project is licensed under the [MIT License](LICENSE).
+- Speaker diarization
+- Speaker-level timestamps
+- PDF report export
+- Batch processing
+- Automated tests
 
 ---
 
-## 👤 Author
+# 📄 License
+
+This project is licensed under the **MIT License**.
+
+---
+
+# 👤 Author
 
 **Nipun Gupta**
-[GitHub](https://github.com/nipun-gupta-3108) · [LinkedIn](https://linkedin.com/in/link-nipun-gupta)
+
+GitHub: https://github.com/nipun-gupta-3108
+
+LinkedIn: https://linkedin.com/in/link-nipun-gupta
