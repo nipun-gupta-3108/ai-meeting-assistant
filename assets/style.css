@@ -15,8 +15,10 @@
     11. Utility Classes
     12. Landing Page          (existing — unchanged visually, reorganized)
     13. Workspace / Dashboard (existing — unchanged visually, reorganized)
-    14. Authentication Page   (new — Phase 1)
+    14. Authentication Page   (Phase 1)
     15. Responsive
+    16. Sprint 1 — Content-width tiers, section headings, ghost buttons,
+        history hover, insight accents, docked-panel surface
    ========================================================================== */
 
 /* ==========================================================================
@@ -30,6 +32,11 @@
   --bg-surface: #111827;
   --bg-surface-alt: #0b1220;
   --bg-surface-hover: #1a2030;
+  /* Sprint 1: one step "closer" than --bg-surface, reserved for elements
+     that sit visually above the page content — currently only the docked
+     chat panel. Not a new hue, a lightness step within the existing dark
+     palette. */
+  --bg-surface-raised: #161d2e;
 
   /* Border */
   --border-subtle: rgba(255, 255, 255, 0.08);
@@ -39,12 +46,18 @@
   /* Text */
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
-  --text-tertiary: #64748b;
+  /* Sprint 1: lightened from #64748b for AA contrast against --bg-surface
+     at small sizes (history metadata, transcript box body text both use
+     this token at ~12-14px). Same hue, adjusted lightness only. */
+  --text-tertiary: #7c8aa1;
 
   /* Accent */
   --accent: #7c8cf8;
   --accent-hover: #6b7cf5;
   --accent-soft: rgba(124, 140, 248, 0.35);
+  /* Sprint 1: subtle fill for active/selected state backgrounds, distinct
+     from --accent-soft which is reserved for the focus-ring shadow. */
+  --accent-muted-bg: rgba(124, 140, 248, 0.08);
 
   /* Semantic (used by the .alert-* components) */
   --danger: #f87171;
@@ -62,12 +75,22 @@
   --info-border: rgba(124, 140, 248, 0.32);
   --info-text: #c7d2fe;
 
-  /* Typography — font stacks only for now. A full numeric type scale is
-     deferred until after the Landing/Workspace redesign so it can be
-     derived from every screen's real needs at once, rather than guessed
-     early and reworked later. */
+  /* Typography — font stacks */
   --font-sans: Inter, system-ui, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* Sprint 1: numeric type scale. Existing selectors already hardcode
+     most of these exact pixel values (42px landing headline, 26px auth
+     headline, etc.) — these tokens document the scale and are used by
+     any new/updated rule below. Existing selectors are left as literal
+     px values to avoid touching working, unrelated CSS. */
+  --text-xs: 11px;
+  --text-sm: 12.5px;
+  --text-base: 14px;
+  --text-md: 16px;
+  --text-lg: 16px;
+  --text-xl: 26px;
+  --text-2xl: 42px;
 
   /* Spacing scale */
   --space-1: 4px;
@@ -91,6 +114,15 @@
   /* Motion */
   --transition-fast: 0.15s ease;
   --transition-snappy: 0.1s ease;
+
+  /* Sprint 1: content-width tiers. .auth-shell already hardcodes 420px
+     and .main .block-container already hardcodes 760px — both are left
+     as-is (zero visual change) and simply mirrored here as tokens so the
+     new wide workspace tier reads as part of the same system rather than
+     a one-off magic number. */
+  --content-width-narrow: 420px;
+  --content-width-default: 760px;
+  --content-width-wide: 900px;
 }
 
 /* ==========================================================================
@@ -108,6 +140,17 @@
   padding-bottom: 4rem;
 }
 
+/* Sprint 1: workspace-only wide column. streamlit_app.py's
+   render_workspace() emits a single empty marker div
+   (".workspace-wide-marker") at the top of its content; :has() lets the
+   ancestor .block-container react to that marker without any JS and
+   without affecting any other screen (landing, auth, processing), since
+   only render_workspace() emits this marker. Unsupported browsers simply
+   keep the default 760px width — no functional impact either way. */
+.main .block-container:has(.workspace-wide-marker) {
+  max-width: var(--content-width-wide);
+}
+
 h1,
 h2,
 h3 {
@@ -117,14 +160,7 @@ h3 {
 
 /* ==========================================================================
    3. TYPOGRAPHY PRIMITIVES
-   ==========================================================================
-   Only the primitives the authentication page actually needs. Font sizes
-   below are kept as literal px values (matching the previous stylesheet)
-   rather than scale tokens — a full --text-* scale will be introduced
-   once Landing and Workspace typography needs are known too. */
-
-/* Small uppercase eyebrow label above a headline. Not auth-specific by
-   name, so any future screen can reuse it. */
+   ========================================================================== */
 [data-testid="stMarkdownContainer"] p.page-eyebrow {
   font-family: var(--font-mono);
   font-size: 11px !important;
@@ -135,11 +171,6 @@ h3 {
   margin: 0 0 10px;
 }
 
-/* Streamlit renders these <p> tags inside stMarkdownContainer, which
-   carries Streamlit's own default paragraph typography via a compound
-   selector that outranks a single custom class on plain specificity.
-   Anchoring to the stable stMarkdownContainer test id + !important on the
-   two properties that matter is what makes these sizes stick. */
 [data-testid="stMarkdownContainer"] p.landing-headline {
   font-size: 42px !important;
   line-height: 1.15 !important;
@@ -178,9 +209,35 @@ h3 {
   margin: 0 auto 1.75rem;
 }
 
-/* Widget labels (text inputs, selectboxes, etc.) — app-wide, reusable.
-   Streamlit's default label styling is inconsistent with this theme; this
-   brings every form label to one consistent look. */
+/* Sprint 1: .section-heading is used throughout streamlit_app.py
+   (render_insight_section, render_chat, render_export, and the workspace
+   Summary/Transcript headings) but had no dedicated rule before this
+   sprint — it was inheriting only Streamlit's default paragraph style.
+   This fills that gap: heavier weight so it reads as a clear section
+   anchor against body copy, which sits at a similar size. */
+[data-testid="stMarkdownContainer"] p.section-heading {
+  font-size: var(--text-lg) !important;
+  font-weight: 600 !important;
+  color: var(--text-primary);
+  margin: 0 0 10px;
+}
+
+/* Sprint 1: left-border category accent for the three insight sections,
+   applied via an additional class on the same .section-heading element
+   (see render_insight_section in streamlit_app.py). Deliberately just a
+   border tint (var(--border-strong)), not a new color, so four
+   back-to-back sections (Summary, Action Items, Key Decisions, Open
+   Questions) are easier to visually segment without adding hue. */
+[data-testid="stMarkdownContainer"]
+  p.section-heading.section-accent-action_items,
+[data-testid="stMarkdownContainer"]
+  p.section-heading.section-accent-key_decisions,
+[data-testid="stMarkdownContainer"]
+  p.section-heading.section-accent-open_questions {
+  border-left: 2px solid var(--border-strong);
+  padding-left: 10px;
+}
+
 [data-testid="stWidgetLabel"] p {
   font-size: 12.5px !important;
   font-weight: 500;
@@ -277,6 +334,31 @@ h3 {
   border-color: var(--border-strong);
 }
 
+/* Sprint 1: ghost/tertiary button. streamlit_app.py emits an invisible
+   ".ghost-button-marker" div immediately before the target st.button() —
+   the adjacent-sibling selector below styles that button without needing
+   any Streamlit "type" argument (st.button only supports primary/
+   secondary natively). Currently used only for the workspace "Back to
+   history / New meeting" control, so it doesn't visually compete with
+   the primary actions elsewhere on the same screen. */
+.ghost-button-marker + div .stButton > button {
+  background: transparent;
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.ghost-button-marker + div .stButton > button:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.ghost-button-marker + div .stButton > button:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
 /* ==========================================================================
    6. INPUTS & FORM FIELDS
    ========================================================================== */
@@ -345,6 +427,20 @@ h3 {
   border-color: var(--border-strong) !important;
 }
 
+/* Sprint 1: history-item hover affordance. Only the "Open" button inside
+   each history card is actually clickable — this hover cue on the whole
+   card communicates that more clearly than a static border. Targets the
+   key-based class Streamlit generates for st.container(border=True,
+   key=...) (render_history_item now passes a per-meeting key) via a
+   substring match, since the id portion of the class name is dynamic. */
+[class*="st-key-history_card_"] {
+  transition: border-color var(--transition-fast);
+}
+
+[class*="st-key-history_card_"]:hover {
+  border-color: var(--border-strong) !important;
+}
+
 /* ==========================================================================
    8. FORMS
    ========================================================================== */
@@ -355,11 +451,7 @@ h3 {
 
 /* ==========================================================================
    9. ALERTS
-   ==========================================================================
-   Reusable, theme-safe inline alert. Built as plain styled markup instead
-   of overriding Streamlit's internal st.error/st.warning testids, so it
-   keeps working regardless of Streamlit version. Use render_alert() in
-   streamlit_app.py rather than st.error()/st.warning() directly. */
+   ========================================================================== */
 .alert {
   display: flex;
   align-items: flex-start;
@@ -440,8 +532,26 @@ h3 {
   color: var(--text-secondary);
 }
 
+/* Sprint 1: small icon + text metadata line, used for chat source
+   citations to match the existing history-meta / workspace-meta visual
+   pattern instead of plain caption text. */
+.meta-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 2px 0 0;
+}
+
+.meta-line svg {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
 /* ==========================================================================
-   12. LANDING PAGE  (existing — unchanged, reorganized under tokens)
+   12. LANDING PAGE
    ========================================================================== */
 .brand-row {
   display: flex;
@@ -546,7 +656,7 @@ h3 {
 }
 
 /* ==========================================================================
-   13. WORKSPACE / DASHBOARD  (existing — unchanged, reorganized)
+   13. WORKSPACE / DASHBOARD
    ========================================================================== */
 .workspace-h1 {
   font-size: 26px;
@@ -559,13 +669,6 @@ h3 {
   font-size: 13px;
   color: var(--text-secondary);
   margin: 0 0 2.5rem;
-}
-
-.section-heading {
-  font-size: 16px;
-  font-weight: 500;
-  margin: 0 0 10px;
-  color: var(--text-primary);
 }
 
 .transcript-box {
@@ -595,8 +698,19 @@ h3 {
   padding-top: 8px;
 }
 
+/* Sprint 1: docked chat panel surface. render_chat() renders inside the
+   normal page flow (no new wrapper container was introduced — see
+   streamlit_app.py notes), so this targets the existing chat input
+   dock Streamlit renders at the bottom of the viewport, giving it a
+   surface one step "above" the page background rather than blending
+   into it. */
+[data-testid="stChatInput"] {
+  background: var(--bg-surface-raised);
+  border-top: 1px solid var(--border-subtle);
+}
+
 /* ==========================================================================
-   14. AUTHENTICATION PAGE  (new — Phase 1)
+   14. AUTHENTICATION PAGE
    ========================================================================== */
 .auth-shell {
   max-width: 420px;
@@ -609,6 +723,13 @@ h3 {
 @media (max-width: 760px) {
   .main .block-container {
     padding-top: 2rem;
+  }
+
+  /* Sprint 1: the wide workspace column collapses back to full width on
+     small screens, matching the existing pattern already used for
+     .auth-shell below. */
+  .main .block-container:has(.workspace-wide-marker) {
+    max-width: 100%;
   }
 
   .workspace-h1 {

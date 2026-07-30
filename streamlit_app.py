@@ -76,12 +76,15 @@ _CREATED_AT_DISPLAY_FORMAT = "%b %d, %Y %I:%M %p"
 # that is actually implemented (see README) — nothing here is aspirational.
 FEATURE_CHIPS = ["Audio", "Video", "YouTube", "AI Summary", "Chat"]
 
-# Small, self-contained Lucide-style icons used only on the landing page
-# (history rows, empty states). Kept as raw SVG strings rather than a
-# separate assets file since there are only two of them and both are tiny.
+# Small, self-contained Lucide-style icons used across the app (landing
+# history rows, empty states, chat citations). Kept as raw SVG strings
+# rather than a separate assets file since there are only a few of them.
+# All are marked aria-hidden="true" (Sprint 1) since each is always paired
+# with adjacent visible text and would otherwise be redundantly announced
+# by screen readers.
 _ICON_FILE_TEXT = (
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
-    'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'
+    'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
     '<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>'
     '<polyline points="14 2 14 8 20 8"></polyline>'
     '<line x1="16" y1="13" x2="8" y2="13"></line>'
@@ -92,10 +95,19 @@ _ICON_FILE_TEXT = (
 
 _ICON_INBOX = (
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
-    'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'
+    'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
     '<path d="M22 12h-6l-2 3h-4l-2-3H2"></path>'
     '<path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 '
     '16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>'
+    "</svg>"
+)
+
+# Sprint 1: used for the chat source-citation meta line (see render_chat).
+_ICON_LINK = (
+    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>'
+    '<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>'
     "</svg>"
 )
 
@@ -232,7 +244,7 @@ def render_brand_row():
         '<div class="brand-row">'
         '<span class="brand-mark">'
         '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f8fafc" '
-        'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'
+        'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
         '<rect x="9" y="2" width="6" height="11" rx="3"></rect>'
         '<path d="M5 10v1a7 7 0 0 0 14 0v-1"></path>'
         '<line x1="12" y1="18" x2="12" y2="22"></line>'
@@ -252,7 +264,7 @@ def render_brand_row():
 _ALERT_ICONS = {
     "error": (
         '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
-        'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
         '<circle cx="12" cy="12" r="10"></circle>'
         '<line x1="12" y1="8" x2="12" y2="12"></line>'
         '<line x1="12" y1="16" x2="12.01" y2="16"></line>'
@@ -260,19 +272,29 @@ _ALERT_ICONS = {
     ),
     "success": (
         '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
-        'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
         '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>'
         '<polyline points="22 4 12 14.01 9 11.01"></polyline>'
         "</svg>"
     ),
     "info": (
         '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
-        'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
         '<circle cx="12" cy="12" r="10"></circle>'
         '<line x1="12" y1="16" x2="12" y2="12"></line>'
         '<line x1="12" y1="8" x2="12.01" y2="8"></line>'
         "</svg>"
     ),
+}
+
+# Sprint 1: ARIA role per alert kind, so screen readers announce these the
+# same way native st.error/st.warning would have — this was implicit
+# behavior lost when render_alert() replaced those native components for
+# theming reasons (see docstring below).
+_ALERT_ROLES = {
+    "error": "alert",
+    "success": "status",
+    "info": "status",
 }
 
 
@@ -289,10 +311,16 @@ def render_alert(message: str, kind: str = "error") -> None:
     ".alert-{kind}" classes and _ALERT_ICONS above. Purely presentational:
     this never reads or writes session state, and is intended to be reused
     by any future screen that needs a themed inline message, not just auth.
+
+    A "role" attribute (alert/status per _ALERT_ROLES) is included so
+    screen readers announce this the same way the native st.error/
+    st.warning components would have, since this custom markup replaced
+    those without an accessibility tree of its own otherwise.
     """
     icon = _ALERT_ICONS.get(kind, _ALERT_ICONS["error"])
+    role = _ALERT_ROLES.get(kind, "status")
     st.markdown(
-        f'<div class="alert alert-{kind}">'
+        f'<div class="alert alert-{kind}" role="{role}">'
         f'<span class="alert-icon">{icon}</span>'
         f"<span>{html.escape(message)}</span>"
         "</div>",
@@ -324,8 +352,19 @@ def render_feature_chips():
 
 def render_insight_section(title: str, items: list, empty_key: str):
     """Render one insights section, showing a quiet empty state when there
-    are no items to display."""
-    st.markdown(f'<p class="section-heading">{title}</p>', unsafe_allow_html=True)
+    are no items to display.
+
+    Sprint 1: the heading gets an additional "section-accent-{empty_key}"
+    class, giving Action Items / Key Decisions / Open Questions a subtle
+    left-border tint (see assets/style.css section 3) so four back-to-back
+    sections are easier to visually segment without introducing a new
+    color. Purely a class-name addition — empty_key's value and meaning
+    are unchanged from before.
+    """
+    st.markdown(
+        f'<p class="section-heading section-accent-{empty_key}">{title}</p>',
+        unsafe_allow_html=True,
+    )
     if not items:
         message = EMPTY_STATE_MESSAGES[empty_key]
         st.markdown(
@@ -403,9 +442,17 @@ def render_history_item(meeting: dict):
     Title and metadata are untrusted (title is LLM-generated, then
     user-persisted; created_at can fall back to a raw stored string — see
     format_history_timestamp). Both are explicitly html.escape()'d before
-    being interpolated into unsafe_allow_html markup, since this row now
-    builds its own HTML (icon + title, and a mono-font metadata line)
-    instead of relying on st.markdown's default escaping.
+    being interpolated into unsafe_allow_html markup, since this row builds
+    its own HTML (icon + title, and a mono-font metadata line) instead of
+    relying on st.markdown's default escaping.
+
+    Sprint 1: the container is given a stable per-meeting key
+    ("history_card_{id}") so assets/style.css can target it with a
+    [class*="st-key-history_card_"] hover rule, giving the whole card a
+    hover affordance even though only the "Open" button inside it is
+    actually clickable. This is a CSS hook only — it does not read or
+    write any session_state and cannot collide with the "open_meeting_{id}"
+    button key below (different widget/key namespace).
     """
     title = meeting.get("title") or "Untitled meeting"
     language_label = LANGUAGE_DISPLAY_LABELS.get(
@@ -416,7 +463,7 @@ def render_history_item(meeting: dict):
 
     meeting_id = meeting.get("id")
 
-    with st.container(border=True):
+    with st.container(border=True, key=f"history_card_{meeting_id}"):
         st.markdown(
             f'<div class="history-item-title">{_ICON_FILE_TEXT}'
             f"{html.escape(title)}</div>",
@@ -753,8 +800,14 @@ def _cleanup_uploaded_temp_file():
 def render_processing():
     _, center, _ = st.columns([1, 3, 1])
     with center:
+        # Sprint 1: message updated to name the pipeline's actual stages
+        # instead of one generic sentence. Still a single st.spinner call
+        # with no fabricated progress bar — the pipeline does not report
+        # intermediate progress, so a progress bar would misrepresent
+        # real state.
         with st.spinner(
-            "Processing media, transcribing audio, and building meeting intelligence..."
+            "Running the pipeline: preparing audio → transcribing → "
+            "summarizing → extracting insights → building the transcript index..."
         ):
             try:
                 result = run_meeting_assistant_pipeline(
@@ -814,6 +867,13 @@ def render_chat(result: dict):
     cases is invisible from here — whether result["rag_chain"] was
     already set by core/pipeline.py, or gets attached lazily by
     ensure_rag_chain() below the first time a question is asked.
+
+    Sprint 1: source-citation lines are rendered as an icon + text
+    ".meta-line" (matching the visual pattern already used for
+    history-meta / workspace-meta) instead of plain st.caption() text.
+    format_sources_line()'s output is generated internally from integer
+    chunk indices only (see core/transcript_qa.py), so rendering it with
+    unsafe_allow_html carries no injection risk.
     """
     st.markdown(
         '<p class="section-heading">Ask about this meeting</p>', unsafe_allow_html=True
@@ -827,7 +887,10 @@ def render_chat(result: dict):
             # as before, with no citation line.
             sources_line = format_sources_line(message.get("sources"))
             if sources_line:
-                st.caption(sources_line)
+                st.markdown(
+                    f'<p class="meta-line">{_ICON_LINK}{html.escape(sources_line)}</p>',
+                    unsafe_allow_html=True,
+                )
 
     question = st.chat_input("Ask anything about this meeting...")
     if question:
@@ -868,7 +931,10 @@ def render_chat(result: dict):
             st.markdown(answer)
             sources_line = format_sources_line(sources)
             if sources_line:
-                st.caption(sources_line)
+                st.markdown(
+                    f'<p class="meta-line">{_ICON_LINK}{html.escape(sources_line)}</p>',
+                    unsafe_allow_html=True,
+                )
 
         # Sources are stored alongside the answer so that on the next
         # Streamlit rerun (e.g. from a later chat_input submission),
@@ -880,6 +946,10 @@ def render_chat(result: dict):
 
 
 def render_export(result: dict):
+    """Sprint 1: report download is the primary action (most users want
+    the full analysis); raw transcript download is secondary. Purely a
+    button-type/visual-hierarchy change — both buttons still trigger the
+    same download behavior as before."""
     st.markdown('<p class="section-heading">Export</p>', unsafe_allow_html=True)
     col1, col2 = st.columns(2)
     with col1:
@@ -889,6 +959,7 @@ def render_export(result: dict):
             file_name="meeting_analysis.txt",
             mime="text/plain",
             use_container_width=True,
+            type="primary",
         )
     with col2:
         st.download_button(
@@ -897,15 +968,29 @@ def render_export(result: dict):
             file_name="transcript.txt",
             mime="text/plain",
             use_container_width=True,
+            type="secondary",
         )
 
 
 def render_workspace(result: dict):
+    # Sprint 1: invisible marker consumed only by the CSS :has() rule in
+    # assets/style.css (".block-container:has(.workspace-wide-marker)")
+    # to widen this screen's content column relative to landing/auth. No
+    # other screen emits this marker, so nothing else is affected, and
+    # browsers without :has() support simply keep the existing default
+    # width — no functional impact either way.
+    st.markdown('<div class="workspace-wide-marker"></div>', unsafe_allow_html=True)
+
     render_user_bar()
 
     is_historical = result.get("is_historical", False)
     back_label = "← Back to history" if is_historical else "← New meeting"
 
+    # Sprint 1: ghost-button marker (see assets/style.css) so this
+    # secondary navigation action doesn't visually compete with the page
+    # title / primary content below it. Purely a CSS hook via an adjacent
+    # empty div — the st.button() call and its behavior are unchanged.
+    st.markdown('<div class="ghost-button-marker"></div>', unsafe_allow_html=True)
     if st.button(back_label):
         # The RAG chain for this meeting is about to go out of scope for
         # good — clean up its Chroma collection now rather than waiting
