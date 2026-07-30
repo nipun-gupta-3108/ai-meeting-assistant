@@ -691,7 +691,7 @@ def render_landing():
     render_feature_chips()
 
     if st.session_state.error_message:
-        st.error(st.session_state.error_message)
+        render_alert(st.session_state.error_message, kind="error")
 
     with st.container(border=True):
         toggle_col_a, toggle_col_b = st.columns(2)
@@ -762,14 +762,20 @@ def render_landing():
 
         if input_mode == "Upload file":
             if uploaded_file is None:
-                st.warning("Upload an audio or video file before running analysis.")
+                render_alert(
+                    "Upload an audio or video file before running analysis.",
+                    kind="info",
+                )
                 return
             resolved_source = save_uploaded_file(uploaded_file)
             # Track this as our own temp artifact so it can be cleaned up
             # once the pipeline is done with it — see _cleanup_uploaded_temp_file.
             st.session_state.uploaded_temp_path = resolved_source
         elif not source.strip():
-            st.warning("Enter a YouTube URL before running analysis.")
+            render_alert(
+                "Enter a YouTube URL before running analysis.",
+                kind="info",
+            )
             return
         else:
             resolved_source = source.strip()
