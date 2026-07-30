@@ -1102,10 +1102,10 @@ def _cleanup_stale_artifacts_once():
     Never point cleanup_stale_temp_files() at arbitrary user directories.
     """
 
-    cleanup_stale_collections()
+    # cleanup_stale_collections()
 
-    cleanup_stale_temp_files(DOWNLOAD_DIR)
-    cleanup_stale_temp_files(str(UPLOAD_DIR))
+    # cleanup_stale_temp_files(DOWNLOAD_DIR)
+    # cleanup_stale_temp_files(str(UPLOAD_DIR))
 
     return True
 
