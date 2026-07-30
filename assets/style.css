@@ -1,26 +1,105 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap");
+/* ==========================================================================
+   AI MEETING ASSISTANT — DESIGN SYSTEM
+   ==========================================================================
+   Sections:
+     1. Design Tokens
+     2. Base / Reset
+     3. Typography Primitives
+     4. Layout Utilities
+     5. Buttons
+     6. Inputs & Form Fields
+     7. Cards
+     8. Forms
+     9. Alerts (reusable, theme-safe — do not use st.error/st.warning raw)
+    10. Empty States
+    11. Utility Classes
+    12. Landing Page          (existing — unchanged visually, reorganized)
+    13. Workspace / Dashboard (existing — unchanged visually, reorganized)
+    14. Authentication Page   (new — Phase 1)
+    15. Responsive
+   ========================================================================== */
 
+/* ==========================================================================
+   1. DESIGN TOKENS
+   ========================================================================== */
 :root {
-  /* Landing/upload-scoped tokens only — the shared page background and
-     workspace (dashboard) colors below are left as hardcoded hex exactly
-     as before, so this redesign cannot shift anything outside the landing
-     and upload experience. */
-  --surface-hover: #1a2030;
-  --border-soft: rgba(255, 255, 255, 0.08);
+  /* Background — matches .streamlit/config.toml exactly so there is no
+     flash-of-mismatched-color between Streamlit's native theme and this
+     stylesheet. */
+  --bg-base: #0f172a;
+  --bg-surface: #111827;
+  --bg-surface-alt: #0b1220;
+  --bg-surface-hover: #1a2030;
+
+  /* Border */
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-default: rgba(255, 255, 255, 0.12);
   --border-strong: rgba(255, 255, 255, 0.16);
+
+  /* Text */
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #64748b;
+
+  /* Accent */
   --accent: #7c8cf8;
+  --accent-hover: #6b7cf5;
   --accent-soft: rgba(124, 140, 248, 0.35);
+
+  /* Semantic (used by the .alert-* components) */
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.12);
+  --danger-border: rgba(248, 113, 113, 0.32);
+  --danger-text: #fca5a5;
+
+  --success: #4ade80;
+  --success-soft: rgba(74, 222, 128, 0.12);
+  --success-border: rgba(74, 222, 128, 0.32);
+  --success-text: #86efac;
+
+  --info: #7c8cf8;
+  --info-soft: rgba(124, 140, 248, 0.12);
+  --info-border: rgba(124, 140, 248, 0.32);
+  --info-text: #c7d2fe;
+
+  /* Typography — font stacks only for now. A full numeric type scale is
+     deferred until after the Landing/Workspace redesign so it can be
+     derived from every screen's real needs at once, rather than guessed
+     early and reworked later. */
+  --font-sans: Inter, system-ui, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* Spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+
+  /* Elevation */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.24);
+  --shadow-focus: 0 0 0 3px var(--accent-soft);
+
+  /* Motion */
+  --transition-fast: 0.15s ease;
+  --transition-snappy: 0.1s ease;
 }
 
+/* ==========================================================================
+   2. BASE / RESET
+   ========================================================================== */
 .stApp {
-  background: #0f172a;
-  color: #f8fafc;
-  font-family:
-    "Inter",
-    -apple-system,
-    "Segoe UI",
-    sans-serif;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
 }
 
 .main .block-container {
@@ -32,39 +111,35 @@
 h1,
 h2,
 h3 {
-  color: #f8fafc;
+  color: var(--text-primary);
   font-weight: 500;
 }
 
-/* Landing
-   ─────────────────────────────────────────────────────────────────────────
-   Shared 640px measure: .brand-row, .landing-headline, .landing-sub,
-   .hero-waveform, .feature-chips, .landing-footnote, and the bordered panel
-   below all share the same max-width + margin:0 auto so their edges line up
-   and the composition reads as one grouped block rather than independently
-   centered elements. */
-.brand-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  max-width: 640px;
-  margin: 0 auto 2rem;
+/* ==========================================================================
+   3. TYPOGRAPHY PRIMITIVES
+   ==========================================================================
+   Only the primitives the authentication page actually needs. Font sizes
+   below are kept as literal px values (matching the previous stylesheet)
+   rather than scale tokens — a full --text-* scale will be introduced
+   once Landing and Workspace typography needs are known too. */
+
+/* Small uppercase eyebrow label above a headline. Not auth-specific by
+   name, so any future screen can reuse it. */
+[data-testid="stMarkdownContainer"] p.page-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  text-align: center;
+  margin: 0 0 10px;
 }
 
-.brand-name {
-  font-size: 15px;
-  font-weight: 500;
-  color: #f8fafc;
-}
-
-/* Streamlit renders this <p> inside its own stMarkdownContainer, which
-   carries Streamlit's default paragraph typography via a compound selector
-   that outranks a single custom class on plain specificity — that's why
-   `.landing-headline { font-size: 40px }` alone was being overridden and
-   rendering at Streamlit's default size instead. Anchoring the rule to the
-   stable stMarkdownContainer test id raises specificity to win reliably;
-   !important on the two properties that matter locks it in without having
-   to fight Streamlit's rule on every future release. */
+/* Streamlit renders these <p> tags inside stMarkdownContainer, which
+   carries Streamlit's own default paragraph typography via a compound
+   selector that outranks a single custom class on plain specificity.
+   Anchoring to the stable stMarkdownContainer test id + !important on the
+   two properties that matter is what makes these sizes stick. */
 [data-testid="stMarkdownContainer"] p.landing-headline {
   font-size: 42px !important;
   line-height: 1.15 !important;
@@ -73,23 +148,326 @@ h3 {
   text-align: center;
   max-width: 640px;
   margin: 0 auto 14px;
-  color: #f8fafc;
+  color: var(--text-primary);
+}
+
+[data-testid="stMarkdownContainer"] p.auth-headline {
+  font-size: 26px !important;
+  line-height: 1.15 !important;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  text-align: center;
+  margin: 0 auto 14px;
+  color: var(--text-primary);
 }
 
 [data-testid="stMarkdownContainer"] p.landing-sub {
   font-size: 16px !important;
   line-height: 1.6 !important;
-  color: #94a3b8;
+  color: var(--text-secondary);
   text-align: center;
   max-width: 460px;
   margin: 0 auto 1.75rem;
 }
 
-/* Signature element — a thin, static waveform divider under the hero.
-   This is the one deliberate visual risk in the redesign (ties directly
-   to "audio in → structured text out"); everything else on the page stays
-   quiet by comparison, so this stays a plain divider, not an illustration:
-   no animation, low opacity, fixed small height. */
+[data-testid="stMarkdownContainer"] p.auth-subtitle {
+  font-size: 14px !important;
+  line-height: 1.6 !important;
+  color: var(--text-secondary);
+  text-align: center;
+  margin: 0 auto 1.75rem;
+}
+
+/* Widget labels (text inputs, selectboxes, etc.) — app-wide, reusable.
+   Streamlit's default label styling is inconsistent with this theme; this
+   brings every form label to one consistent look. */
+[data-testid="stWidgetLabel"] p {
+  font-size: 12.5px !important;
+  font-weight: 500;
+  color: var(--text-secondary) !important;
+  margin-bottom: 4px !important;
+}
+
+/* ==========================================================================
+   4. LAYOUT UTILITIES
+   ========================================================================== */
+.section-gap {
+  height: 2.25rem;
+}
+
+.form-spacer {
+  height: 20px;
+}
+
+/* ==========================================================================
+   5. BUTTONS
+   ========================================================================== */
+.stButton > button {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-snappy);
+}
+
+.stButton > button:hover {
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+}
+
+.stButton > button:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.stButton > button:active {
+  transform: translateY(1px);
+}
+
+.stButton > button[kind="primary"] {
+  background: var(--text-primary);
+  color: var(--bg-base);
+  border: 1px solid var(--text-primary);
+  font-weight: 600;
+}
+
+.stButton > button[kind="primary"]:hover {
+  background: #e2e8f0;
+  color: var(--bg-base);
+  border: 1px solid #e2e8f0;
+  transform: translateY(-1px);
+}
+
+[data-testid="stVerticalBlockBorderWrapper"] .stButton > button {
+  border-radius: 10px;
+  padding: 12px 18px;
+}
+
+[data-testid="stVerticalBlockBorderWrapper"]
+  [data-testid="stHorizontalBlock"]
+  .stButton
+  > button {
+  padding: 9px 14px;
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+[data-testid="stVerticalBlockBorderWrapper"]
+  [data-testid="stHorizontalBlock"]
+  .stButton
+  > button[kind="secondary"] {
+  background: transparent;
+  color: var(--text-secondary);
+  border-color: var(--border-default);
+}
+
+[data-testid="stVerticalBlockBorderWrapper"]
+  [data-testid="stHorizontalBlock"]
+  .stButton
+  > button[kind="secondary"]:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+/* ==========================================================================
+   6. INPUTS & FORM FIELDS
+   ========================================================================== */
+[data-testid="stTextInput"] input {
+  background: var(--bg-surface-alt);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  color: var(--text-primary);
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+[data-testid="stTextInput"] input::placeholder {
+  color: var(--text-tertiary);
+}
+
+[data-testid="stTextInput"] input:focus {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-focus);
+}
+
+[data-testid="stSelectbox"] [data-baseweb="select"] > div {
+  background: var(--bg-surface-alt) !important;
+  border: 1px solid var(--border-default) !important;
+  border-radius: var(--radius-sm) !important;
+  min-height: 40px !important;
+  font-size: 14px !important;
+  transition: border-color var(--transition-fast);
+}
+
+[data-testid="stSelectbox"]:focus-within [data-baseweb="select"] > div {
+  border-color: var(--accent) !important;
+}
+
+[data-testid="stFileUploaderDropzone"] {
+  background: var(--bg-surface-alt);
+  border: 1.5px dashed var(--border-default);
+  border-radius: 14px;
+  transition:
+    border-color var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+[data-testid="stFileUploaderDropzone"]:hover {
+  border-color: var(--accent-soft);
+  background: #0e1526;
+}
+
+/* ==========================================================================
+   7. CARDS
+   ========================================================================== */
+[data-testid="stVerticalBlockBorderWrapper"] {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-card);
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 32px;
+  transition: border-color var(--transition-fast);
+}
+
+[data-testid="stVerticalBlockBorderWrapper"]:focus-within {
+  border-color: var(--border-strong) !important;
+}
+
+/* ==========================================================================
+   8. FORMS
+   ========================================================================== */
+[data-testid="stForm"] {
+  border: none;
+  padding: 0;
+}
+
+/* ==========================================================================
+   9. ALERTS
+   ==========================================================================
+   Reusable, theme-safe inline alert. Built as plain styled markup instead
+   of overriding Streamlit's internal st.error/st.warning testids, so it
+   keeps working regardless of Streamlit version. Use render_alert() in
+   streamlit_app.py rather than st.error()/st.warning() directly. */
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0 0 var(--space-4);
+  border: 1px solid transparent;
+}
+
+.alert-icon {
+  display: flex;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.alert-error {
+  background: var(--danger-soft);
+  border-color: var(--danger-border);
+  color: var(--danger-text);
+}
+.alert-error .alert-icon {
+  color: var(--danger);
+}
+
+.alert-success {
+  background: var(--success-soft);
+  border-color: var(--success-border);
+  color: var(--success-text);
+}
+.alert-success .alert-icon {
+  color: var(--success);
+}
+
+.alert-info {
+  background: var(--info-soft);
+  border-color: var(--info-border);
+  color: var(--info-text);
+}
+.alert-info .alert-icon {
+  color: var(--info);
+}
+
+/* ==========================================================================
+   10. EMPTY STATES
+   ========================================================================== */
+.empty-state {
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-style: italic;
+  margin: 0;
+}
+
+.empty-state-landing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.empty-state-landing svg {
+  flex-shrink: 0;
+  opacity: 0.5;
+}
+
+/* ==========================================================================
+   11. UTILITY CLASSES
+   ========================================================================== */
+.text-center {
+  text-align: center;
+}
+
+.text-muted {
+  color: var(--text-secondary);
+}
+
+/* ==========================================================================
+   12. LANDING PAGE  (existing — unchanged, reorganized under tokens)
+   ========================================================================== */
+.brand-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 640px;
+  margin: 0 auto 2rem;
+}
+
+.brand-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+}
+
+.brand-name {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
 .hero-waveform {
   display: flex;
   align-items: center;
@@ -107,10 +485,6 @@ h3 {
   background: var(--accent);
 }
 
-/* Feature chips — a quiet, factual list of what the app actually does.
-   Static by design: these aren't buttons and don't do anything when
-   clicked, so no hover affordance is added — a hover state here would
-   imply interactivity that doesn't exist. */
 .feature-chips {
   display: flex;
   flex-wrap: wrap;
@@ -124,203 +498,21 @@ h3 {
 .feature-chip {
   font-size: 12.5px;
   font-weight: 500;
-  color: #94a3b8;
+  color: var(--text-secondary);
   background: transparent;
-  border: 1px solid var(--border-soft);
-  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
   padding: 6px 14px;
 }
 
 [data-testid="stMarkdownContainer"] p.landing-footnote {
   font-size: 13px;
-  color: #94a3b8;
+  color: var(--text-secondary);
   text-align: center;
   max-width: 640px;
   margin: 18px auto 0;
 }
 
-/* Command surface — the bordered st.container(border=True) wrapping the
-   source toggle, input, language selector, and CTA. This targets Streamlit's
-   own testid for bordered containers rather than a deep/guessed selector;
-   if a future Streamlit version renames it, the container still renders
-   with Streamlit's default border — it just loses this exact background,
-   width, and spacing. */
-[data-testid="stVerticalBlockBorderWrapper"] {
-  background: #111827;
-  border: 1px solid var(--border-soft) !important;
-  border-radius: 20px !important;
-  max-width: 640px;
-  margin: 0 auto;
-  padding: 32px;
-  transition: border-color 0.15s ease;
-}
-
-[data-testid="stVerticalBlockBorderWrapper"]:focus-within {
-  border-color: var(--border-strong) !important;
-}
-
-/* Buttons — unscoped rule, applies app-wide (landing toggle/CTA, workspace
-   "New meeting" and download buttons) exactly as it did before. Left
-   untouched so the workspace/dashboard keeps its exact current look; all
-   new micro-interactions below are scoped to the landing panel only. */
-.stButton > button {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  font-weight: 500;
-  background: #111827;
-  color: #f8fafc;
-}
-
-.stButton > button:hover {
-  background: #1e293b;
-  color: #f8fafc;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.stButton > button[kind="primary"] {
-  background: #f8fafc;
-  color: #0f172a;
-  border: 1px solid #f8fafc;
-}
-
-.stButton > button[kind="primary"]:hover {
-  background: #e2e8f0;
-  color: #0f172a;
-  border: 1px solid #e2e8f0;
-}
-
-/* Landing panel buttons only (scoped under the bordered wrapper) — refines
-   the CTA's size/weight and adds micro-interactions (hover lift, focus
-   ring, pressed state) without touching buttons anywhere else in the app. */
-[data-testid="stVerticalBlockBorderWrapper"] .stButton > button {
-  border-radius: 10px;
-  padding: 12px 18px;
-  transition:
-    background-color 0.15s ease,
-    border-color 0.15s ease,
-    color 0.15s ease,
-    transform 0.1s ease;
-}
-
-[data-testid="stVerticalBlockBorderWrapper"] .stButton > button:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
-
-[data-testid="stVerticalBlockBorderWrapper"] .stButton > button:active {
-  transform: translateY(1px);
-}
-
-[data-testid="stVerticalBlockBorderWrapper"]
-  .stButton
-  > button[kind="primary"] {
-  font-weight: 600;
-}
-
-[data-testid="stVerticalBlockBorderWrapper"]
-  .stButton
-  > button[kind="primary"]:hover {
-  transform: translateY(-1px);
-}
-
-/* Source toggle (YouTube URL / Upload file) — the only buttons in the panel
-   nested inside a horizontal block, so this selector reaches them alone and
-   overrides the general panel-button rule above via higher specificity.
-   Active = filled (kind="primary"), inactive = clearly subtle (kind="secondary"). */
-[data-testid="stVerticalBlockBorderWrapper"]
-  [data-testid="stHorizontalBlock"]
-  .stButton
-  > button {
-  padding: 9px 14px;
-  font-size: 13.5px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-}
-
-[data-testid="stVerticalBlockBorderWrapper"]
-  [data-testid="stHorizontalBlock"]
-  .stButton
-  > button[kind="primary"] {
-  font-weight: 500;
-}
-
-[data-testid="stVerticalBlockBorderWrapper"]
-  [data-testid="stHorizontalBlock"]
-  .stButton
-  > button[kind="secondary"] {
-  background: transparent;
-  color: #94a3b8;
-  border-color: rgba(255, 255, 255, 0.1);
-}
-
-[data-testid="stVerticalBlockBorderWrapper"]
-  [data-testid="stHorizontalBlock"]
-  .stButton
-  > button[kind="secondary"]:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: #f8fafc;
-  border-color: rgba(255, 255, 255, 0.16);
-}
-
-/* URL input — Streamlit renders a plain <input> here with no visible field
-   styling by default; this gives it an actual dark surface + border so the
-   placeholder reads as sitting inside a field rather than floating in space. */
-[data-testid="stTextInput"] input {
-  background: #0b1220;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 8px;
-  padding: 12px 14px;
-  color: #f8fafc;
-  transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease;
-}
-
-[data-testid="stTextInput"] input::placeholder {
-  color: #64748b;
-}
-
-[data-testid="stTextInput"] input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
-
-/* Language select — Streamlit builds this on top of the third-party BaseWeb
-   library, so `data-baseweb="select"` (not a Streamlit test id) is the only
-   reliable hook for the visible control; !important is needed because
-   BaseWeb applies its own inline-specificity CSS-in-JS styles. */
-[data-testid="stSelectbox"] [data-baseweb="select"] > div {
-  background: #0b1220 !important;
-  border: 1px solid rgba(255, 255, 255, 0.14) !important;
-  border-radius: 8px !important;
-  min-height: 40px !important;
-  font-size: 14px !important;
-  transition: border-color 0.15s ease;
-}
-
-[data-testid="stSelectbox"]:focus-within [data-baseweb="select"] > div {
-  border-color: var(--accent) !important;
-}
-
-/* File uploader dropzone — restyled to match the panel's dark surface and
-   given a hover state so dragging a file over it reads as interactive.
-   Streamlit's own icon/copy inside are left as-is; only the container's
-   surface, border, and hover transition are changed. */
-[data-testid="stFileUploaderDropzone"] {
-  background: #0b1220;
-  border: 1.5px dashed rgba(255, 255, 255, 0.14);
-  border-radius: 14px;
-  transition:
-    border-color 0.15s ease,
-    background-color 0.15s ease;
-}
-
-[data-testid="stFileUploaderDropzone"]:hover {
-  border-color: var(--accent-soft);
-  background: #0e1526;
-}
-
-/* Centered processing state */
 [data-testid="stSpinner"] {
   display: flex;
   justify-content: center;
@@ -332,18 +524,13 @@ h3 {
   justify-content: center;
 }
 
-/* Meeting history (part of the landing page) — icon + metadata row.
-   .history-meta is intentionally its own class rather than reusing
-   Streamlit's st.caption/stCaptionContainer, so this mono-font metadata
-   styling can never leak into the chat panel's source-citation captions
-   in the workspace, which are out of scope for this pass. */
 .history-item-title {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 14px;
   font-weight: 600;
-  color: #f8fafc;
+  color: var(--text-primary);
 }
 
 .history-item-title svg {
@@ -354,38 +541,23 @@ h3 {
 .history-meta {
   font-family: var(--font-mono);
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--text-secondary);
   margin: 4px 0 0;
 }
 
-/* Landing-only empty state (meeting history list). Kept as its own class,
-   separate from the shared `.empty-state` used by the workspace's insight
-   sections, so this icon treatment stays scoped to the landing page. */
-.empty-state-landing {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  color: #94a3b8;
-  margin: 0;
-}
-
-.empty-state-landing svg {
-  flex-shrink: 0;
-  opacity: 0.5;
-}
-
-/* Workspace document — unchanged, dashboard redesign is a later phase */
+/* ==========================================================================
+   13. WORKSPACE / DASHBOARD  (existing — unchanged, reorganized)
+   ========================================================================== */
 .workspace-h1 {
   font-size: 26px;
   font-weight: 500;
   margin: 1.5rem 0 6px;
-  color: #f8fafc;
+  color: var(--text-primary);
 }
 
 .workspace-meta {
   font-size: 13px;
-  color: #94a3b8;
+  color: var(--text-secondary);
   margin: 0 0 2.5rem;
 }
 
@@ -393,35 +565,47 @@ h3 {
   font-size: 16px;
   font-weight: 500;
   margin: 0 0 10px;
-  color: #f8fafc;
-}
-
-.empty-state {
-  font-size: 14px;
-  color: #94a3b8;
-  font-style: italic;
-  margin: 0;
+  color: var(--text-primary);
 }
 
 .transcript-box {
   max-height: 420px;
   overflow-y: auto;
   padding: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  background: #111827;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
   font-size: 14px;
   line-height: 1.7;
   white-space: pre-wrap;
-  color: #94a3b8;
+  color: var(--text-secondary);
 }
 
 .section-divider {
   border: none;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--border-subtle);
   margin: 2.5rem 0;
 }
 
+.user-bar {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+  padding-top: 8px;
+}
+
+/* ==========================================================================
+   14. AUTHENTICATION PAGE  (new — Phase 1)
+   ========================================================================== */
+.auth-shell {
+  max-width: 420px;
+  margin: 3rem auto 0;
+}
+
+/* ==========================================================================
+   15. RESPONSIVE
+   ========================================================================== */
 @media (max-width: 760px) {
   .main .block-container {
     padding-top: 2rem;
@@ -443,8 +627,17 @@ h3 {
     font-size: 14px !important;
   }
 
+  [data-testid="stMarkdownContainer"] p.auth-headline {
+    font-size: 22px !important;
+  }
+
   [data-testid="stVerticalBlockBorderWrapper"] {
     padding: 24px;
+  }
+
+  .auth-shell {
+    max-width: 100%;
+    margin-top: 1.5rem;
   }
 
   .feature-chips {
@@ -455,13 +648,4 @@ h3 {
     font-size: 12px;
     padding: 5px 12px;
   }
-}
-
-/* Signed-in user bar, shown at the top of the landing page and workspace. */
-.user-bar {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: #94a3b8;
-  margin: 0;
-  padding-top: 8px;
 }

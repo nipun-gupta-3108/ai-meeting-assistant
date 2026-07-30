@@ -222,17 +222,79 @@ def render_styles():
 def render_brand_row():
     """The small logo + app-name row shown at the top of the auth screen,
     landing page, and workspace — factored out so all three stay
-    visually identical without copy-pasting the inline SVG three times."""
+    visually identical without copy-pasting the inline SVG three times.
+
+    The logo mark is wrapped in a ".brand-mark" chip (its own small dark
+    surface) as part of the Phase 1 design system, rather than the bare
+    SVG floating directly on the page background.
+    """
     st.markdown(
         '<div class="brand-row">'
-        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f8fafc" '
+        '<span class="brand-mark">'
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f8fafc" '
         'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'
         '<rect x="9" y="2" width="6" height="11" rx="3"></rect>'
         '<path d="M5 10v1a7 7 0 0 0 14 0v-1"></path>'
         '<line x1="12" y1="18" x2="12" y2="22"></line>'
         '<line x1="8" y1="22" x2="16" y2="22"></line>'
         "</svg>"
+        "</span>"
         f'<span class="brand-name">{APP_NAME}</span>'
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+# Icons for render_alert(), keyed by the same "kind" values used by the
+# .alert-{kind} CSS classes (assets/style.css, section 9 — Alerts). Kept as
+# a module-level dict rather than inline in the function so any future
+# screen reusing render_alert() doesn't need to know the icon markup exists.
+_ALERT_ICONS = {
+    "error": (
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+        'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        '<circle cx="12" cy="12" r="10"></circle>'
+        '<line x1="12" y1="8" x2="12" y2="12"></line>'
+        '<line x1="12" y1="16" x2="12.01" y2="16"></line>'
+        "</svg>"
+    ),
+    "success": (
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+        'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>'
+        '<polyline points="22 4 12 14.01 9 11.01"></polyline>'
+        "</svg>"
+    ),
+    "info": (
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+        'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        '<circle cx="12" cy="12" r="10"></circle>'
+        '<line x1="12" y1="16" x2="12" y2="12"></line>'
+        '<line x1="12" y1="8" x2="12.01" y2="8"></line>'
+        "</svg>"
+    ),
+}
+
+
+def render_alert(message: str, kind: str = "error") -> None:
+    """Reusable inline alert, styled to match the dark theme.
+
+    Replaces bare st.error()/st.warning() calls, which render Streamlit's
+    default alert component and don't fit this app's dark theme cleanly.
+    Built as plain styled markup (see the ".alert" rules in
+    assets/style.css) rather than CSS overrides of Streamlit's internal
+    alert testids, so it keeps working regardless of Streamlit version.
+
+    `kind` is one of "error", "success", "info" — matching the
+    ".alert-{kind}" classes and _ALERT_ICONS above. Purely presentational:
+    this never reads or writes session state, and is intended to be reused
+    by any future screen that needs a themed inline message, not just auth.
+    """
+    icon = _ALERT_ICONS.get(kind, _ALERT_ICONS["error"])
+    st.markdown(
+        f'<div class="alert alert-{kind}">'
+        f'<span class="alert-icon">{icon}</span>'
+        f"<span>{html.escape(message)}</span>"
         "</div>",
         unsafe_allow_html=True,
     )
@@ -498,26 +560,34 @@ def render_signup_form():
 def render_auth_screen():
     """Render the login/signup gate shown whenever no user is signed in.
 
-    Mirrors the landing page's visual language (brand row, bordered
-    command-surface panel, same toggle pattern used for YouTube/Upload)
-    so the pre-login experience matches the rest of the app rather than
-    reading as a bolted-on afterthought. Nothing else in main() renders
-    until st.session_state.current_user is set.
+    Reuses the same Card/Button/Input/Alert primitives introduced by the
+    Phase 1 design system, laid out inside a narrower centered shell
+    (".auth-shell") that suits a login form better than the landing page's
+    wider command-surface panel. Nothing else in main() renders until
+    st.session_state.current_user is set.
+
+    Interaction model is unchanged from before this refactor: the
+    Log in/Sign up toggle still flips st.session_state.auth_mode and
+    clears st.session_state.auth_error, and the two forms below are still
+    rendered by the untouched render_login_form()/render_signup_form().
     """
+    st.markdown('<div class="auth-shell">', unsafe_allow_html=True)
+
     render_brand_row()
 
+    st.markdown('<p class="page-eyebrow">Welcome</p>', unsafe_allow_html=True)
     st.markdown(
-        '<p class="landing-headline">Welcome back</p>',
+        '<p class="auth-headline">Sign in to your workspace</p>',
         unsafe_allow_html=True,
     )
     st.markdown(
-        '<p class="landing-sub">Sign in to analyze meetings and revisit '
-        "your history.</p>",
+        '<p class="auth-subtitle">Analyze meetings and revisit your '
+        "history in one place.</p>",
         unsafe_allow_html=True,
     )
 
     if st.session_state.auth_error:
-        st.error(st.session_state.auth_error)
+        render_alert(st.session_state.auth_error, kind="error")
 
     with st.container(border=True):
         tab_col_a, tab_col_b = st.columns(2)
@@ -544,10 +614,14 @@ def render_auth_screen():
                 st.session_state.auth_mode = "signup"
                 st.session_state.auth_error = None
 
+        st.markdown('<div class="form-spacer"></div>', unsafe_allow_html=True)
+
         if st.session_state.auth_mode == "login":
             render_login_form()
         else:
             render_signup_form()
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_landing():
