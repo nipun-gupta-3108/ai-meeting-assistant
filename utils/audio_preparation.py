@@ -40,13 +40,20 @@ def download_audio_from_youtube(url: str) -> str:
         "format": "bestaudio/best",
         "outtmpl": output_path,
         "noplaylist": True,
-        "quiet": True,
-        "impersonate": "chrome",
+        "quiet": False,
+        "geo_bypass": True,
+        "retries": 10,
+        "fragment_retries": 10,
     }
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        return ydl.prepare_filename(info)
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            return ydl.prepare_filename(info)
+
+    except Exception:
+        logger.exception("YouTube download failed")
+        raise
 
 
 def convert_media_to_wav(input_path: str) -> str:
