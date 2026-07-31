@@ -113,8 +113,17 @@ def build_transcript_rag_chain(transcript: str, collection_name: str):
 
     retriever = create_transcript_retriever(vector_store, k=12)
 
-    llm = create_llm()
-    contextualize_chain = _build_contextualize_chain(llm)
+    small_llm = create_llm(
+        model="llama-3.1-8b-instant",
+        temperature=0,
+    )
+
+    big_llm = create_llm(
+        model="llama-3.3-70b-versatile",
+        temperature=0,
+    )
+    
+    contextualize_chain = _build_contextualize_chain(small_llm)
 
     answer_prompt = ChatPromptTemplate.from_messages(
         [
@@ -123,7 +132,7 @@ def build_transcript_rag_chain(transcript: str, collection_name: str):
             ("human", "{question}"),
         ]
     )
-    answer_chain = answer_prompt | llm | StrOutputParser()
+    answer_chain = answer_prompt | big_llm | StrOutputParser()
 
     # Retrieval now happens exactly once per question, using a standalone
     # (history-resolved) version of the question. Both the answer step and

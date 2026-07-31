@@ -950,9 +950,20 @@ def render_chat(result: dict):
                     )
                     answer = qa_result["answer"]
                     sources = qa_result["sources"]
+                except RateLimitError:
+                    logger.exception("Groq rate limit exceeded")
+
+                    answer = (
+                        "⚠️ AI service has temporarily reached its usage limit. "
+                        "Please try again in a few minutes."
+                    )
+                    sources = []
+
                 except Exception as exc:
                     logger.exception("Q&A failed for question: %s", question)
-                    answer = f"Sorry, I couldn't answer that: {exc}"
+                    answer = (
+                        "⚠️ Sorry, something went wrong while answering your question."
+                    )
                     sources = []
             st.markdown(answer)
             sources_line = format_sources_line(sources)
