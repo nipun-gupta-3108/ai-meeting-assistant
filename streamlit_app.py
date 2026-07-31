@@ -829,10 +829,12 @@ def render_processing():
         # with no fabricated progress bar — the pipeline does not report
         # intermediate progress, so a progress bar would misrepresent
         # real state.
-        with st.spinner(
-            "Running the pipeline: preparing audio → transcribing → "
-            "summarizing → extracting insights → building the transcript index..."
-        ):
+        with center:
+            st.markdown(
+                "<h4 style='text-align:center;'>Analyzing your meeting...</h4>",
+                unsafe_allow_html=True,
+            )
+
             try:
                 result = run_meeting_assistant_pipeline(
                     st.session_state.pending_source,

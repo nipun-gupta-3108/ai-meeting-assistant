@@ -34,13 +34,13 @@ Return ONLY valid JSON.
 
 The output MUST EXACTLY follow this schema:
 
-{
+{{
   "summary": [
     "Bullet 1",
     "Bullet 2",
     "Bullet 3"
   ]
-}
+}}
 
 Rules:
 - summary must be a JSON array of strings.
