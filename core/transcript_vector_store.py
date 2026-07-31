@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 CHROMA_DIR = "vector_db"
 COLLECTION_NAME = "meeting_transcript"
-EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
+EMBEDDING_MODEL = "BAAI/bge-base-en-v1.5"
 
 # How old an untouched collection must be before the startup sweep will
 # remove it. Kept well above any realistic single-session duration so an
@@ -125,7 +125,7 @@ def create_transcript_retriever(
         search_type="mmr",
         search_kwargs={
             "k": k,
-            "fetch_k": 20,
+            "fetch_k": 50,
         },
     )
 

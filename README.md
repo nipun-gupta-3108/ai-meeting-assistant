@@ -209,7 +209,7 @@ Title   Summary  Insights
 | LLM                | Groq (Llama 3.3 70B)      |
 | AI Framework       | LangChain (LCEL)          |
 | Vector Database    | ChromaDB                  |
-| Embeddings         | BAAI/bge-small-en-v1.5    |
+| Embeddings         | BAAI/bge-base-en-v1.5    |
 | Authentication     | bcrypt                    |
 | Database           | SQLite                    |
 

@@ -35,26 +35,44 @@ without the chat history. Do NOT answer the question — only reformulate it. If
 question is already standalone, return it unchanged. Return only the reformulated \
 question, with no explanation, quotes, or extra text."""
 
-ANSWER_SYSTEM_PROMPT = """You are a meeting Q&A assistant. Use only the transcript \
-context below to answer the user's question.
+ANSWER_SYSTEM_PROMPT = """You are an AI Meeting Assistant.
 
-If the transcript does not contain the answer, reply exactly:
+Answer the user's question using ONLY the transcript context provided below.
+
+Instructions:
+- Carefully read ALL transcript context before answering.
+- The information needed to answer may be spread across multiple transcript excerpts. Combine information across all relevant excerpts into a single coherent answer.
+- Do not rely on outside knowledge or make up facts.
+- If the transcript contains only part of the answer, provide the partial answer and clearly mention what is missing.
+- Only reply exactly:
 "I could not find this information in the meeting transcript."
+if the transcript context contains no relevant information at all.
 
-The conversation history is provided only to help you understand what a follow-up \
-question ("why?", "who else?", etc.) is referring to. Your answer must still be \
-grounded strictly in the transcript context below — never answer from the \
-conversation history alone.
-
-Keep the answer brief, specific, and grounded in the transcript. When you quote or \
-refer to a speaker's words, make that clear.
+Formatting:
+- Be concise but complete.
+- Use bullet points when listing action items, decisions, risks, participants, or questions.
+- Preserve names, dates, deadlines, and technical terms exactly as they appear in the transcript.
+- When quoting someone, make it clear that it is a quote.
+- Do not mention the transcript chunks in the answer.
 
 Transcript context:
-{context}"""
+{context}
+"""
 
 
 def format_retrieved_documents(docs):
     return "\n\n".join([doc.page_content for doc in docs])
+
+
+def debug_documents(docs):
+    print("\n" + "=" * 80)
+    print("RETRIEVED DOCUMENTS")
+    print("=" * 80)
+
+    for i, doc in enumerate(docs, 1):
+        print(f"\nChunk {i}")
+        print("-" * 80)
+        print(doc.page_content)
 
 
 def _build_contextualize_chain(llm):
@@ -93,7 +111,7 @@ def build_transcript_rag_chain(transcript: str, collection_name: str):
         transcript, collection_name=collection_name
     )
 
-    retriever = create_transcript_retriever(vector_store, k=4)
+    retriever = create_transcript_retriever(vector_store, k=12)
 
     llm = create_llm()
     contextualize_chain = _build_contextualize_chain(llm)
@@ -121,7 +139,10 @@ def build_transcript_rag_chain(transcript: str, collection_name: str):
         )
         | RunnablePassthrough.assign(
             source_documents=RunnableLambda(
-                lambda x: retriever.invoke(x["standalone_question"])
+                lambda x: (
+                    debug_documents(docs := retriever.invoke(x["standalone_question"])),
+                    docs,
+                )[1]
             )
         )
         | RunnablePassthrough.assign(
