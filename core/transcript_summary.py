@@ -4,126 +4,173 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from core.llm_client import create_llm
 import json
+import re
 
-# Enforced both in the combine prompt and again here in Python, since the
-# prompt limit alone can't be trusted to hold on every response.
 MAX_SUMMARY_BULLETS = 5
 MAX_BULLET_WORDS = 25
 
-COMBINE_SYSTEM_PROMPT = """You are an expert meeting summarizer. You will be given \
-several partial summaries of segments of one meeting.
+COMBINE_SYSTEM_PROMPT = """You are an expert meeting summarizer.
 
-Combine them into a single meeting summary of at most 5 bullet points.
+You will be given several partial summaries from different portions of the same meeting.
+
+Your job is to merge them into ONE concise meeting summary.
 
 Rules:
-- At most 5 bullets total.
-- Each bullet must be under 25 words.
-- Do not repeat similar points; merge overlapping observations into a single bullet.
-- Do not invent facts that are not present in the partial summaries.
-- Use objective, neutral language; do not add sentiment or editorializing that \
-isn't explicitly present in the partial summaries.
+- Maximum 5 bullets.
+- Each bullet must contain at most 25 words.
+- Merge duplicate or overlapping points.
+- Keep important names, dates, deadlines and numbers.
+- Never invent facts.
+- Use neutral language.
 
-If there are more than 5 distinct points, choose which 5 to keep using this \
-priority order (highest first):
+Priority:
 1. Decisions
-2. Actionable outcomes
-3. Facts / metrics
+2. Action items
+3. Important facts / metrics
 4. Risks / blockers
 5. General discussion
 
-When two points have equal priority, keep the more specific one (the one with \
-concrete names, numbers, or details) over the more general one.
+Return ONLY valid JSON.
 
-Return ONLY a single valid JSON object with exactly one key, "summary", whose value \
-is an array of bullet strings. Do not include markdown code fences (no ```), \
-explanations, or any text outside the JSON object."""
+The output MUST EXACTLY follow this schema:
+
+{
+  "summary": [
+    "Bullet 1",
+    "Bullet 2",
+    "Bullet 3"
+  ]
+}
+
+Rules:
+- summary must be a JSON array of strings.
+- Every bullet must be enclosed in double quotes.
+- Do NOT use markdown bullets (* or -).
+- Do NOT number the bullets.
+- Do NOT output markdown.
+- Do NOT output explanations.
+- Do NOT output anything outside the JSON object.
+"""
 
 
 def _extract_json_object(raw_text: str) -> str:
-    """Best-effort extraction of a JSON object from the model's raw response.
-
-    The prompt asks for JSON only, but models sometimes wrap the object in
-    markdown code fences anyway. This strips fences and slices out the
-    outermost {...} span so json.loads gets the best possible input.
-
-    Kept local to this module rather than shared with core/transcript_insights.py,
-    since both modules parse a different JSON shape and are meant to stay
-    independent.
-    """
     text = raw_text.strip()
 
     if text.startswith("```"):
-        text = text.strip("`")
-        if text[:4].lower() == "json":
-            text = text[4:]
-        text = text.strip()
+        text = re.sub(r"^```(?:json)?", "", text).strip()
+        text = re.sub(r"```$", "", text).strip()
 
     start = text.find("{")
     end = text.rfind("}")
-    if start == -1 or end == -1 or end < start:
-        return text
 
-    return text[start : end + 1]
+    if start != -1 and end != -1:
+        return text[start : end + 1]
+
+    return text
 
 
-def _truncate_words(text: str, max_words: int) -> str:
+def _truncate_words(text: str, limit: int):
     words = text.split()
-    if len(words) <= max_words:
-        return text
-    return " ".join(words[:max_words])
+    return " ".join(words[:limit])
 
 
-def parse_summary_bullets(raw_text: str) -> list:
-    """Parse the model's JSON output into a list of summary bullets.
+def parse_summary_bullets(raw_text: str):
 
-    Defensive by design: never raises. If the output isn't valid JSON, the
-    raw text is kept as a single bullet rather than losing the model's
-    output entirely. Always capped at MAX_SUMMARY_BULLETS bullets of at
-    most MAX_BULLET_WORDS words each.
-    """
     if not raw_text:
         return []
 
     try:
         data = json.loads(_extract_json_object(raw_text))
+
+        bullets = data.get("summary", [])
+
+        cleaned = []
+        seen = set()
+
+        for bullet in bullets:
+
+            bullet = str(bullet).strip()
+
+            if not bullet:
+                continue
+
+            bullet = _truncate_words(
+                bullet,
+                MAX_BULLET_WORDS,
+            )
+
+            if bullet.lower() in seen:
+                continue
+
+            seen.add(bullet.lower())
+            cleaned.append(bullet)
+
+        return cleaned[:MAX_SUMMARY_BULLETS]
+
     except Exception:
+
+        bullets = re.findall(
+            r"[*-]\s*(.+)",
+            raw_text,
+        )
+
+        if bullets:
+            cleaned = []
+
+            for b in bullets:
+                b = _truncate_words(
+                    b.strip(),
+                    MAX_BULLET_WORDS,
+                )
+
+                if b not in cleaned:
+                    cleaned.append(b)
+
+            return cleaned[:MAX_SUMMARY_BULLETS]
+
         stripped = raw_text.strip()
-        return [_truncate_words(stripped, MAX_BULLET_WORDS)] if stripped else []
 
-    if not isinstance(data, dict):
+        if stripped:
+            return [
+                _truncate_words(
+                    stripped,
+                    MAX_BULLET_WORDS,
+                )
+            ]
+
         return []
 
-    bullets = data.get("summary")
-    if not isinstance(bullets, list):
-        return []
 
-    cleaned = []
-    for bullet in bullets:
-        text = str(bullet).strip()
-        if text:
-            cleaned.append(_truncate_words(text, MAX_BULLET_WORDS))
+def split_transcript_for_summary(transcript: str):
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=3000,
+        chunk_overlap=200,
+    )
 
-    return cleaned[:MAX_SUMMARY_BULLETS]
-
-
-def split_transcript_for_summary(transcript: str) -> list:
-    splitter = RecursiveCharacterTextSplitter(chunk_size=3000, chunk_overlap=200)
     return splitter.split_text(transcript)
 
 
-def summarize_transcript(transcript: str) -> list:
+def summarize_transcript(transcript: str):
+
     llm = create_llm()
+
     map_prompt = ChatPromptTemplate.from_messages(
         [
             (
                 "system",
-                "Summarize this portion of a meeting transcript concisely. "
-                "Preserve important names, numbers, dates, deadlines, metrics, "
-                "and decisions exactly as stated rather than paraphrasing them "
-                "away — later steps depend on these specifics surviving this "
-                "summary. Prefer specific statements over vague generalities. "
-                "Use objective, neutral language; do not add sentiment or "
-                "editorializing that isn't explicitly present in the transcript.",
+                """Summarize this portion of the meeting.
+
+Keep:
+- decisions
+- action items
+- deadlines
+- names
+- numbers
+- metrics
+
+Be concise.
+Do not invent facts.
+""",
             ),
             ("human", "{text}"),
         ]
@@ -153,23 +200,34 @@ def summarize_transcript(transcript: str) -> list:
     )
 
     raw_output = combined_chain.invoke(combined)
+
+    print("\n")
+    print("=" * 80)
+    print("RAW SUMMARY OUTPUT")
+    print("=" * 80)
+    print(raw_output)
+    print("=" * 80)
+    print()
+
     return parse_summary_bullets(raw_output)
 
 
-def generate_meeting_title(transcript: str) -> str:
+def generate_meeting_title(transcript: str):
+
     llm = create_llm()
 
     title_prompt = ChatPromptTemplate.from_messages(
         [
             (
                 "system",
-                "Based on the meeting transcript, generate a short, specific meeting "
-                "title (max 8 words) that names the actual subject discussed — the "
-                "project, product, or decision at the center of the meeting — rather "
-                "than a generic label like 'Team Meeting' or 'Project Discussion'. If "
-                "a dominant project or product name appears in the transcript, "
-                "include it in the title. Do not use quotation marks or a trailing "
-                "period. Only return the title, nothing else.",
+                """Generate a meeting title.
+
+Rules:
+- Maximum 8 words.
+- Be specific.
+- Mention project/product if possible.
+- Return ONLY the title.
+""",
             ),
             ("human", "{text}"),
         ]
@@ -184,4 +242,5 @@ def generate_meeting_title(transcript: str) -> str:
     )
 
     title = title_chain.invoke(transcript[:2000]).strip()
+
     return title if title else "Untitled Meeting"
