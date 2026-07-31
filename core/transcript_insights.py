@@ -1,7 +1,7 @@
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
-from core.llm_client import create_llm
+from core.llm_client import create_gemini
 import json
 
 # Maximum number of items kept per section, enforced both in the prompt
@@ -11,7 +11,7 @@ MAX_ITEMS_PER_SECTION = 5
 
 
 def build_extraction_chain(system_prompt: str):
-    llm = create_llm(temperature=0.2)
+    llm = create_gemini(temperature=0)
     return (
         RunnablePassthrough()
         | RunnableLambda(lambda x: {"text": x})

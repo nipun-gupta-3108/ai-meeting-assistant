@@ -26,9 +26,8 @@ def run_meeting_assistant_pipeline(source: str, language: str = "english") -> di
         # turn out.
         cleanup_chunk_files(chunks)
 
-    title = generate_meeting_title(transcript)
-
     summary = summarize_transcript(transcript)
+    title = generate_meeting_title(summary)
 
     insights = extract_meeting_insights_from_transcript(transcript)
 

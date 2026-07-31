@@ -2,7 +2,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
-from core.llm_client import create_llm
+from core.llm_client import create_gemini
 import json
 import re
 
@@ -152,7 +152,7 @@ def split_transcript_for_summary(transcript: str):
 
 def summarize_transcript(transcript: str):
 
-    llm = create_llm()
+    llm = create_gemini()
 
     map_prompt = ChatPromptTemplate.from_messages(
         [
@@ -212,20 +212,25 @@ Do not invent facts.
     return parse_summary_bullets(raw_output)
 
 
-def generate_meeting_title(transcript: str):
+def generate_meeting_title(summary_bullets):
 
-    llm = create_llm()
+    llm = create_gemini()
+
+    if isinstance(summary_bullets, list):
+        summary_text = "\n".join(f"- {bullet}" for bullet in summary_bullets)
+    else:
+        summary_text = str(summary_bullets)
 
     title_prompt = ChatPromptTemplate.from_messages(
         [
             (
                 "system",
-                """Generate a meeting title.
+                """Generate a concise meeting title.
 
 Rules:
 - Maximum 8 words.
-- Be specific.
-- Mention project/product if possible.
+- Mention the project/topic if possible.
+- Do not invent information.
 - Return ONLY the title.
 """,
             ),
@@ -241,6 +246,6 @@ Rules:
         | StrOutputParser()
     )
 
-    title = title_chain.invoke(transcript[:2000]).strip()
+    title = title_chain.invoke(summary_text).strip()
 
     return title if title else "Untitled Meeting"
