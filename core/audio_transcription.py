@@ -24,7 +24,7 @@ SARVAM_MODEL = os.getenv("SARVAM_STT_MODEL", "saaras:v2.5")
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def load_whisper_model():
     compute_type = "float16" if device == "cuda" else "int8"
 
