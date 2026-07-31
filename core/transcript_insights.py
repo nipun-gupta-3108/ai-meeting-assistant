@@ -178,8 +178,17 @@ def parse_insight_sections(raw_text: str) -> dict:
     return result
 
 
-def extract_meeting_insights_from_transcript(transcript: str) -> dict:
-    """Single Groq call returning action items, key decisions, and open questions
-    as structured lists (see parse_insight_sections for the exact shape)."""
-    raw_output = get_insights_chain().invoke(transcript)
+def extract_meeting_insights_from_summary(summary) -> dict:
+    """
+    Extract action items, key decisions, and open questions
+    from the generated meeting summary instead of the full transcript.
+    """
+
+    if isinstance(summary, list):
+        text = "\n".join(f"- {item}" for item in summary)
+    else:
+        text = str(summary)
+
+    raw_output = get_insights_chain().invoke(text)
+
     return parse_insight_sections(raw_output)
