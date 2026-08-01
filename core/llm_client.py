@@ -14,7 +14,7 @@ GROQ_DEFAULT_MODEL = os.getenv(
 
 GEMINI_DEFAULT_MODEL = os.getenv(
     "GEMINI_MODEL",
-    "gemini-3.5-flash-lite",
+    "gemini-flash-latest",
 )
 
 # ---------------------------------------------------------------------------
