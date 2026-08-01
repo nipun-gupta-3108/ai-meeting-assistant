@@ -340,7 +340,12 @@ def extract_meeting_insights_from_transcript(transcript: str) -> dict:
     chunks = split_transcript_for_insights(transcript)
 
     map_chain = get_map_chain()
-    partial_outputs = [map_chain.invoke(chunk) for chunk in chunks]
+    partial_outputs = map_chain.batch(
+        [{"text": chunk} for chunk in chunks],
+        config={
+            "max_concurrency": 5,
+        },
+    )
 
     reduce_chain = get_reduce_chain()
     combined_input = _format_partial_insights_for_reduce(partial_outputs)

@@ -121,11 +121,19 @@ def create_transcript_retriever(
     vector_store: Chroma,
     k: int = 8,
 ):
+    """
+    Create a Max Marginal Relevance (MMR) retriever.
+
+    MMR improves answer quality by selecting relevant but diverse transcript
+    chunks, reducing duplicate context sent to the LLM.
+    """
+
     return vector_store.as_retriever(
         search_type="mmr",
         search_kwargs={
             "k": k,
-            "fetch_k": 50,
+            "fetch_k": max(4 * k, 20),
+            "lambda_mult": 0.7,
         },
     )
 
