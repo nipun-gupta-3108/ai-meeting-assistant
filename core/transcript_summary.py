@@ -183,7 +183,7 @@ Do not invent facts.
     chunk_summaries = map_chain.batch(
         [{"text": chunk} for chunk in chunks],
         config={
-            "max_concurrency": 5,
+            "max_concurrency": 2,
         },
     )
 

@@ -343,7 +343,7 @@ def extract_meeting_insights_from_transcript(transcript: str) -> dict:
     partial_outputs = map_chain.batch(
         [{"text": chunk} for chunk in chunks],
         config={
-            "max_concurrency": 5,
+            "max_concurrency": 2,
         },
     )
 
