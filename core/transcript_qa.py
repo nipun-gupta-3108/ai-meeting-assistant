@@ -1,5 +1,8 @@
 import uuid
+import logging
 
+logger = logging.getLogger(__name__)
+from groq import RateLimitError
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
@@ -65,14 +68,14 @@ def format_retrieved_documents(docs):
 
 
 def debug_documents(docs):
-    print("\n" + "=" * 80)
-    print("RETRIEVED DOCUMENTS")
-    print("=" * 80)
+
+    logger.debug("=" * 80)
+    logger.debug("RETRIEVED DOCUMENTS")
+    logger.debug("=" * 80)
 
     for i, doc in enumerate(docs, 1):
-        print(f"\nChunk {i}")
-        print("-" * 80)
-        print(doc.page_content)
+        logger.debug("Chunk %d", i)
+        logger.debug(doc.page_content)
 
 
 def _build_contextualize_chain(llm):
@@ -92,7 +95,10 @@ def _build_contextualize_chain(llm):
             ("human", "{question}"),
         ]
     )
-    return prompt | llm | StrOutputParser()
+
+    return (prompt | llm | StrOutputParser()).with_retry(
+        stop_after_attempt=3,
+    )
 
 
 def _resolve_standalone_question(inputs: dict, contextualize_chain) -> str:
@@ -122,7 +128,7 @@ def build_transcript_rag_chain(transcript: str, collection_name: str):
         model="llama-3.3-70b-versatile",
         temperature=0,
     )
-    
+
     contextualize_chain = _build_contextualize_chain(small_llm)
 
     answer_prompt = ChatPromptTemplate.from_messages(
@@ -132,7 +138,10 @@ def build_transcript_rag_chain(transcript: str, collection_name: str):
             ("human", "{question}"),
         ]
     )
-    answer_chain = answer_prompt | big_llm | StrOutputParser()
+
+    answer_chain = (answer_prompt | big_llm | StrOutputParser()).with_retry(
+        stop_after_attempt=3,
+    )
 
     # Retrieval now happens exactly once per question, using a standalone
     # (history-resolved) version of the question. Both the answer step and
@@ -297,37 +306,71 @@ def _convert_chat_history_to_messages(chat_history: list) -> list:
 
 
 def ask_transcript_question(
-    rag_chain, question: str, chat_history: list | None = None
+    rag_chain,
+    question: str,
+    chat_history: list | None = None,
 ) -> dict:
-    """Ask one question against a transcript's RAG chain.
-
-    `chat_history`, if given, is the caller's own list of prior turns in
-    the app's stored dict format (see _convert_chat_history_to_messages).
-    It should NOT include the current `question` — only turns that came
-    before it.
-
-    Passing nothing (the default) reproduces the original single-turn
-    behavior exactly: with no chat_history, _resolve_standalone_question
-    skips contextualization entirely and retrieval runs on `question` as-is,
-    identical to this function's behavior before conversational memory was
-    added.
-
-    Returns the same contract as before:
-
-        {
-            "answer": <str>,
-            "sources": [{"chunk_index": <int>}, ...],
-        }
-
-    "sources" always corresponds to the exact Documents used to generate
-    "answer" for this call — no separate/second retrieval is performed to
-    produce it.
     """
+    Ask a question about the meeting transcript.
+
+    This function never raises. All provider errors are converted into
+    user-friendly responses so the Streamlit UI doesn't need its own
+    try/except around every question.
+    """
+
     messages = _convert_chat_history_to_messages(chat_history)
 
-    result = rag_chain.invoke({"question": question, "chat_history": messages})
+    try:
+        result = rag_chain.invoke(
+            {
+                "question": question,
+                "chat_history": messages,
+            }
+        )
+
+    except RateLimitError:
+
+        logger.warning("Groq rate limit reached while answering transcript question.")
+
+        return {
+            "answer": (
+                "⚠️ The AI service is temporarily busy.\n\n"
+                "Please wait a minute and try again."
+            ),
+            "sources": [],
+        }
+
+    except Exception as exc:
+
+        logger.exception("RAG question failed.")
+
+        msg = str(exc).lower()
+
+        if "timeout" in msg:
+            return {
+                "answer": ("⚠️ The AI request timed out.\n\n" "Please try again."),
+                "sources": [],
+            }
+
+        if "connection" in msg or "network" in msg or "api" in msg:
+            return {
+                "answer": (
+                    "⚠️ Unable to connect to the AI service.\n\n"
+                    "Please check your internet connection and try again."
+                ),
+                "sources": [],
+            }
+
+        return {
+            "answer": (
+                "⚠️ Something went wrong while answering your question.\n\n"
+                "Please try again."
+            ),
+            "sources": [],
+        }
 
     answer = result.get("answer", "") if isinstance(result, dict) else str(result)
+
     source_documents = (
         result.get("source_documents", []) if isinstance(result, dict) else []
     )

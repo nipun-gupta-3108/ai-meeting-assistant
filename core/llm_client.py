@@ -38,6 +38,7 @@ def create_groq(
         model=model or GROQ_DEFAULT_MODEL,
         groq_api_key=os.getenv("GROQ_API_KEY"),
         temperature=temperature,
+        timeout=60,
     )
 
 
@@ -58,6 +59,7 @@ def create_gemini(
         model=model or GEMINI_DEFAULT_MODEL,
         google_api_key=os.getenv("GOOGLE_API_KEY"),
         temperature=temperature,
+        timeout=60,
     )
 
 

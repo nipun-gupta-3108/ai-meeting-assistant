@@ -4,6 +4,8 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+from groq import RateLimitError
+
 import streamlit as st
 from dotenv import load_dotenv
 
@@ -932,41 +934,22 @@ def render_chat(result: dict):
 
         with st.chat_message("assistant"):
             with st.spinner("Searching transcript..."):
-                try:
-                    # No-op for live meetings (rag_chain already set by
-                    # core/pipeline.py). For a historical meeting, this is
-                    # where the vector store / retriever / chain actually
-                    # get built — on this, the first question, and never
-                    # again for this meeting. If building fails here,
-                    # result["rag_chain"] stays unset, so the next
-                    # question will simply retry rather than being stuck
-                    # in a broken state.
-                    ensure_rag_chain(result)
 
-                    qa_result = ask_transcript_question(
-                        result["rag_chain"],
-                        question,
-                        chat_history=history_for_chain,
-                    )
-                    answer = qa_result["answer"]
-                    sources = qa_result["sources"]
-                except RateLimitError:
-                    logger.exception("Groq rate limit exceeded")
+                ensure_rag_chain(result)
 
-                    answer = (
-                        "⚠️ AI service has temporarily reached its usage limit. "
-                        "Please try again in a few minutes."
-                    )
-                    sources = []
+                qa_result = ask_transcript_question(
+                    result["rag_chain"],
+                    question,
+                    chat_history=history_for_chain,
+                )
 
-                except Exception as exc:
-                    logger.exception("Q&A failed for question: %s", question)
-                    answer = (
-                        "⚠️ Sorry, something went wrong while answering your question."
-                    )
-                    sources = []
+                answer = qa_result["answer"]
+                sources = qa_result["sources"]
+
             st.markdown(answer)
+
             sources_line = format_sources_line(sources)
+
             if sources_line:
                 st.markdown(
                     f'<p class="meta-line">{_ICON_LINK}{html.escape(sources_line)}</p>',
