@@ -49,11 +49,67 @@ def download_audio_from_youtube(url: str) -> str:
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
-            return ydl.prepare_filename(info)
+
+            # Diagnostics for the prepare_filename() mismatch: these are
+            # cheap to log unconditionally (one call per download) and are
+            # the fastest way to see which field actually holds the real
+            # output path if this ever regresses again.
+            logger.info("yt-dlp info.keys(): %s", list(info.keys()))
+            logger.info("yt-dlp prepare_filename(info): %s", ydl.prepare_filename(info))
+            logger.info("yt-dlp info.get('filepath'): %s", info.get("filepath"))
+            logger.info(
+                "yt-dlp info.get('requested_downloads'): %s",
+                info.get("requested_downloads"),
+            )
+            logger.info(
+                "yt-dlp info.get('requested_formats'): %s",
+                info.get("requested_formats"),
+            )
+            logger.info("downloads dir contents: %s", os.listdir(DOWNLOAD_DIR))
+
+            return _resolve_downloaded_filepath(ydl, info)
 
     except Exception:
         logger.exception("YouTube download failed")
         raise
+
+
+def _resolve_downloaded_filepath(ydl: "yt_dlp.YoutubeDL", info: dict) -> str:
+    """Return the file yt-dlp actually wrote to disk, not a guess.
+
+    ydl.prepare_filename(info) re-derives a path from the outtmpl template;
+    it can diverge from the real output file whenever yt-dlp's internal
+    postprocessing (merging, remuxing, extension resolution) changes the
+    final filename after the template would have predicted it. yt-dlp
+    records the true, final path(s) in info["requested_downloads"] once
+    the download completes, so that is checked first. info["filepath"]
+    (newer yt-dlp) and prepare_filename() are kept only as fallbacks for
+    older yt-dlp versions or unusual info shapes.
+
+    Raises RuntimeError (never returns a nonexistent path) if none of the
+    candidates actually exist on disk, so a mismatch fails loudly here
+    instead of surfacing later as an opaque FFmpeg "No such file" error.
+    """
+    requested_downloads = info.get("requested_downloads") or []
+    if requested_downloads:
+        candidate = requested_downloads[0].get("filepath")
+        if candidate and os.path.exists(candidate):
+            return candidate
+
+    candidate = info.get("filepath")
+    if candidate and os.path.exists(candidate):
+        return candidate
+
+    candidate = ydl.prepare_filename(info)
+    if os.path.exists(candidate):
+        return candidate
+
+    raise RuntimeError(
+        "yt-dlp reported a successful download but no output file could be "
+        "located (checked requested_downloads, info['filepath'], and "
+        f"prepare_filename()). Downloads dir contents: "
+        f"{os.listdir(DOWNLOAD_DIR)!r}"
+    )
 
 
 def convert_media_to_wav(input_path: str) -> str:
