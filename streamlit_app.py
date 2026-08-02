@@ -11,6 +11,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+import sys
+
+try:
+    __import__("pysqlite3")
+    sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
+except ImportError:
+    pass
+
 from core.logging_config import configure_logging
 
 configure_logging()

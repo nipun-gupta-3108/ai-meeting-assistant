@@ -6,6 +6,10 @@ from core.llm_client import create_gemini
 import json
 import re
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 MAX_SUMMARY_BULLETS = 5
 MAX_BULLET_WORDS = 25
 
@@ -69,12 +73,12 @@ def _extract_json_object(raw_text: str) -> str:
     return text
 
 
-def _truncate_words(text: str, limit: int):
+def _truncate_words(text: str, limit: int) -> str:
     words = text.split()
     return " ".join(words[:limit])
 
 
-def parse_summary_bullets(raw_text: str):
+def parse_summary_bullets(raw_text: str) -> list[str]:
 
     if not raw_text:
         return []
@@ -150,7 +154,7 @@ def split_transcript_for_summary(transcript: str):
     return splitter.split_text(transcript)
 
 
-def summarize_transcript(transcript: str):
+def summarize_transcript(transcript: str) -> list[str]:
 
     llm = create_gemini()
 
@@ -204,18 +208,18 @@ Do not invent facts.
 
     raw_output = combined_chain.invoke(combined)
 
-    print("\n")
-    print("=" * 80)
-    print("RAW SUMMARY OUTPUT")
-    print("=" * 80)
-    print(raw_output)
-    print("=" * 80)
-    print()
+    logger.debug(
+        "\n%s\nRAW SUMMARY OUTPUT\n%s\n%s\n%s",
+        "=" * 80,
+        "=" * 80,
+        raw_output,
+        "=" * 80,
+    )
 
     return parse_summary_bullets(raw_output)
 
 
-def generate_meeting_title(summary_bullets):
+def generate_meeting_title(summary_bullets: list[str]) -> str:
 
     llm = create_gemini()
 
