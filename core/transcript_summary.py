@@ -180,12 +180,10 @@ Do not invent facts.
 
     chunks = split_transcript_for_summary(transcript)
 
-    chunk_summaries = map_chain.batch(
-        [{"text": chunk} for chunk in chunks],
-        config={
-            "max_concurrency": 2,
-        },
-    )
+    chunk_summaries = []
+
+    for chunk in chunks:
+        chunk_summaries.append(map_chain.invoke({"text": chunk}))
 
     combined = "\n\n".join(chunk_summaries)
 
