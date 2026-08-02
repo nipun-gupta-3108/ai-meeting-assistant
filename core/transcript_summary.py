@@ -2,7 +2,9 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
-from core.llm_client import create_gemini
+from google.api_core.exceptions import GoogleAPICallError
+from groq import APIStatusError
+from core.llm_client import LLMServiceError, create_summary_llm
 import json
 import re
 
@@ -154,9 +156,33 @@ def split_transcript_for_summary(transcript: str):
     return splitter.split_text(transcript)
 
 
+def _invoke_llm_chain(chain, chain_input, step_name: str) -> str:
+    """Invoke a summarization chain, converting provider rate-limit/service
+    errors into a clean LLMServiceError instead of letting a raw SDK
+    exception (and its stack trace) reach the Streamlit UI.
+
+    Mirrors the error-handling style already used in
+    core/transcript_qa.py's ask_transcript_question(): catch specific
+    provider exceptions, log the full detail, and raise/return a
+    short, user-facing message.
+    """
+    try:
+        return chain.invoke(chain_input)
+    except APIStatusError as exc:
+        logger.exception("Groq API error during %s.", step_name)
+        raise LLMServiceError(
+            "The AI service is temporarily busy. Please wait a minute and " "try again."
+        ) from exc
+    except GoogleAPICallError as exc:
+        logger.exception("Gemini API error during %s.", step_name)
+        raise LLMServiceError(
+            "The AI service is temporarily busy. Please wait a minute and " "try again."
+        ) from exc
+
+
 def summarize_transcript(transcript: str) -> list[str]:
 
-    llm = create_gemini()
+    llm = create_summary_llm()
 
     map_prompt = ChatPromptTemplate.from_messages(
         [
@@ -184,13 +210,6 @@ Do not invent facts.
 
     chunks = split_transcript_for_summary(transcript)
 
-    chunk_summaries = []
-
-    for chunk in chunks:
-        chunk_summaries.append(map_chain.invoke({"text": chunk}))
-
-    combined = "\n\n".join(chunk_summaries)
-
     combined_prompt = ChatPromptTemplate.from_messages(
         [
             ("system", COMBINE_SYSTEM_PROMPT),
@@ -206,7 +225,26 @@ Do not invent facts.
         | StrOutputParser()
     )
 
-    raw_output = combined_chain.invoke(combined)
+    if len(chunks) == 1:
+        # Single-chunk meetings skip the map step and feed the transcript
+        # chunk straight into the combine chain instead. The map prompt
+        # only ever produces plain prose ("Summarize this portion..."),
+        # while combine is the step that actually emits the JSON shape
+        # parse_summary_bullets() expects — so skipping combine (as is done
+        # on the insights side) would change the returned format. Skipping
+        # map instead saves one LLM call while keeping the output identical
+        # to the multi-chunk path, since COMBINE_SYSTEM_PROMPT already
+        # tolerates merging just one "partial summary".
+        raw_output = _invoke_llm_chain(combined_chain, chunks[0], "summary combine")
+    else:
+        chunk_summaries = [
+            _invoke_llm_chain(map_chain, {"text": chunk}, "summary map")
+            for chunk in chunks
+        ]
+
+        combined = "\n\n".join(chunk_summaries)
+
+        raw_output = _invoke_llm_chain(combined_chain, combined, "summary combine")
 
     logger.debug(
         "\n%s\nRAW SUMMARY OUTPUT\n%s\n%s\n%s",
@@ -221,7 +259,7 @@ Do not invent facts.
 
 def generate_meeting_title(summary_bullets: list[str]) -> str:
 
-    llm = create_gemini()
+    llm = create_summary_llm()
 
     if isinstance(summary_bullets, list):
         summary_text = "\n".join(f"- {bullet}" for bullet in summary_bullets)
@@ -253,6 +291,6 @@ Rules:
         | StrOutputParser()
     )
 
-    title = title_chain.invoke(summary_text).strip()
+    title = _invoke_llm_chain(title_chain, summary_text, "meeting title").strip()
 
     return title if title else "Untitled Meeting"

@@ -2,8 +2,13 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from core.llm_client import create_gemini
+from google.api_core.exceptions import GoogleAPICallError
+from groq import APIStatusError
+from core.llm_client import LLMServiceError, create_insights_llm
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Maximum number of items kept per section, enforced both in the prompts
 # and again here in Python — the prompt limit alone can't be trusted since
@@ -25,7 +30,7 @@ def build_extraction_chain(system_prompt: str):
     prompt. Shared by both the per-chunk "map" chain and the "reduce"
     combine chain below — they differ only in which prompt is used.
     """
-    llm = create_gemini(temperature=0)
+    llm = create_insights_llm(temperature=0)
     return (
         RunnablePassthrough()
         | RunnableLambda(lambda x: {"text": x})
@@ -38,6 +43,47 @@ def build_extraction_chain(system_prompt: str):
         | llm
         | StrOutputParser()
     )
+
+
+def _invoke_chain(chain, chain_input, step_name: str):
+    """Invoke an insights chain, converting provider rate-limit/service
+    errors into a clean LLMServiceError instead of letting a raw SDK
+    exception (and its stack trace) reach the Streamlit UI.
+
+    Mirrors the error-handling style already used in
+    core/transcript_qa.py's ask_transcript_question(): catch specific
+    provider exceptions, log the full detail, and raise a short,
+    user-facing message. Used for both chain.invoke() and chain.batch()
+    call sites below — `chain_input` is whatever each call site already
+    passes to .invoke()/.batch().
+    """
+    try:
+        return chain.invoke(chain_input)
+    except APIStatusError as exc:
+        logger.exception("Groq API error during %s.", step_name)
+        raise LLMServiceError(
+            "The AI service is temporarily busy. Please wait a minute and " "try again."
+        ) from exc
+    except GoogleAPICallError as exc:
+        logger.exception("Gemini API error during %s.", step_name)
+        raise LLMServiceError(
+            "The AI service is temporarily busy. Please wait a minute and " "try again."
+        ) from exc
+
+
+def _batch_chain(chain, batch_input: list, step_name: str) -> list:
+    try:
+        return chain.batch(batch_input, config={"max_concurrency": 2})
+    except APIStatusError as exc:
+        logger.exception("Groq API error during %s.", step_name)
+        raise LLMServiceError(
+            "The AI service is temporarily busy. Please wait a minute and " "try again."
+        ) from exc
+    except GoogleAPICallError as exc:
+        logger.exception("Gemini API error during %s.", step_name)
+        raise LLMServiceError(
+            "The AI service is temporarily busy. Please wait a minute and " "try again."
+        ) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -329,10 +375,12 @@ def extract_meeting_insights_from_transcript(transcript: str) -> dict:
     bounded number of bounded-size requests, matching transcript_summary.py's
     approach to the same problem.
 
-    The reduce step always runs, even for a single-chunk transcript — this
-    mirrors transcript_summary.py's combine step, which also always runs
-    regardless of chunk count, so behavior doesn't change shape at the
-    chunk-count boundary.
+    For a single-chunk transcript, the reduce step is skipped and the map
+    step's own JSON output is parsed directly instead — the map and reduce
+    prompts both produce the identical {action_items, key_decisions,
+    open_questions} schema, so this is a safe, format-preserving
+    optimization that saves one LLM call. Multi-chunk transcripts are
+    unaffected and always run the reduce step, exactly as before.
     """
     if not transcript or not transcript.strip():
         return {key: list(value) for key, value in _EMPTY_RESULT.items()}
@@ -340,16 +388,20 @@ def extract_meeting_insights_from_transcript(transcript: str) -> dict:
     chunks = split_transcript_for_insights(transcript)
 
     map_chain = get_map_chain()
-    partial_outputs = map_chain.batch(
+
+    if len(chunks) == 1:
+        raw_output = _invoke_chain(map_chain, {"text": chunks[0]}, "insights map")
+        return parse_insight_sections(raw_output)
+
+    partial_outputs = _batch_chain(
+        map_chain,
         [{"text": chunk} for chunk in chunks],
-        config={
-            "max_concurrency": 2,
-        },
+        "insights map",
     )
 
     reduce_chain = get_reduce_chain()
     combined_input = _format_partial_insights_for_reduce(partial_outputs)
-    raw_output = reduce_chain.invoke(combined_input)
+    raw_output = _invoke_chain(reduce_chain, combined_input, "insights reduce")
 
     return parse_insight_sections(raw_output)
 
@@ -439,6 +491,6 @@ def extract_meeting_insights_from_summary(summary) -> dict:
     else:
         text = str(summary)
 
-    raw_output = get_insights_chain().invoke(text)
+    raw_output = _invoke_chain(get_insights_chain(), text, "insights (legacy)")
 
     return parse_insight_sections(raw_output)

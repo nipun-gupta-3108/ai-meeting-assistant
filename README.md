@@ -206,36 +206,22 @@ Title   Summary  Insights
 | Frontend           | Streamlit                 |
 | Audio Processing   | yt-dlp, FFmpeg, pydub     |
 | Speech Recognition | Faster-Whisper, Sarvam AI |
-| LLM                | Groq (Llama 3.3 70B)      |
+| LLM                | Groq (Llama 3.3 70B), with optional Gemini fallback |
 | AI Framework       | LangChain (LCEL)          |
 | Vector Database    | ChromaDB                  |
 | Embeddings         | BAAI/bge-base-en-v1.5    |
 | Authentication     | bcrypt                    |
 | Database           | SQLite                    |
 
----
+### Why Groq is the default LLM provider
 
-# 🚀 Installation
-
-> **Python 3.11 or newer is recommended.**
-
-```bash
-git clone https://github.com/nipun-gupta-3108/ai-meeting-assistant.git
-
-cd ai-meeting-assistant
-
-python -m venv .venv
-
-# Linux / macOS
-source .venv/bin/activate
-
-# Windows
-.venv\Scripts\activate
-
-pip install -r requirements.txt
-
-ffmpeg -version
-```
+Summarization and insight extraction run a map-reduce pipeline that issues several
+LLM calls per meeting (one per transcript chunk, plus a combine/reduce step).
+Gemini's free-tier request quota is low enough that this pattern regularly hit
+`RESOURCE_EXHAUSTED` (429) errors on longer meetings. Groq's free-tier request
+headroom is substantially higher, so it's the default provider for both
+summarization and insight extraction. Gemini remains fully supported and can be
+re-enabled per task via the environment variables below.
 
 ---
 
@@ -259,6 +245,16 @@ WHISPER_MODEL=small
 LLM_MODEL=llama-3.3-70b-versatile
 
 SARVAM_STT_MODEL=saaras:v2.5
+
+# Optional — LLM provider selection for summarization and insight extraction.
+# Accepts "groq" (default) or "gemini". Only needed if you want to switch a
+# task over to Gemini; GROQ_API_KEY alone is enough to run the app as-is.
+SUMMARY_PROVIDER=groq
+INSIGHTS_PROVIDER=groq
+
+# Required only if SUMMARY_PROVIDER or INSIGHTS_PROVIDER is set to "gemini"
+GOOGLE_API_KEY=your_google_api_key
+GEMINI_MODEL=gemini-flash-latest
 ```
 
 ---
