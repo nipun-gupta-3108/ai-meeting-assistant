@@ -2,8 +2,9 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
-from google.api_core.exceptions import GoogleAPICallError
-from groq import APIStatusError
+from google.genai.errors import ServerError
+from groq import APIError
+from langchain_google_genai.chat_models import ChatGoogleGenerativeAIError
 from core.llm_client import LLMServiceError, create_summary_llm
 import json
 import re
@@ -168,12 +169,20 @@ def _invoke_llm_chain(chain, chain_input, step_name: str) -> str:
     """
     try:
         return chain.invoke(chain_input)
-    except APIStatusError as exc:
+    except APIError as exc:
+        # groq.APIError is the base class ChatGroq's client can actually
+        # raise here (it calls the raw groq SDK client with no wrapping):
+        # covers rate limits, other 4xx/5xx status errors, and connection/
+        # timeout errors alike, none of which are APIStatusError subclasses.
         logger.exception("Groq API error during %s.", step_name)
         raise LLMServiceError(
             "The AI service is temporarily busy. Please wait a minute and " "try again."
         ) from exc
-    except GoogleAPICallError as exc:
+    except (ChatGoogleGenerativeAIError, ServerError) as exc:
+        # ChatGoogleGenerativeAI wraps the google-genai SDK's ClientError
+        # (4xx, including 429 rate limits) into ChatGoogleGenerativeAIError,
+        # but does not catch ServerError (5xx) — that propagates raw from
+        # the SDK, so both must be caught here.
         logger.exception("Gemini API error during %s.", step_name)
         raise LLMServiceError(
             "The AI service is temporarily busy. Please wait a minute and " "try again."

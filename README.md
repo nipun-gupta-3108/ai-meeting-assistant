@@ -201,17 +201,17 @@ Title   Summary  Insights
 
 # 🛠️ Tech Stack
 
-| Layer              | Technology                |
-| ------------------ | ------------------------- |
-| Frontend           | Streamlit                 |
-| Audio Processing   | yt-dlp, FFmpeg, pydub     |
-| Speech Recognition | Faster-Whisper, Sarvam AI |
+| Layer              | Technology                                          |
+| ------------------ | --------------------------------------------------- |
+| Frontend           | Streamlit                                           |
+| Audio Processing   | yt-dlp, FFmpeg, pydub                               |
+| Speech Recognition | Faster-Whisper, Sarvam AI                           |
 | LLM                | Groq (Llama 3.3 70B), with optional Gemini fallback |
-| AI Framework       | LangChain (LCEL)          |
-| Vector Database    | ChromaDB                  |
-| Embeddings         | BAAI/bge-base-en-v1.5    |
-| Authentication     | bcrypt                    |
-| Database           | SQLite                    |
+| AI Framework       | LangChain (LCEL)                                    |
+| Vector Database    | ChromaDB                                            |
+| Embeddings         | BAAI/bge-base-en-v1.5                               |
+| Authentication     | bcrypt                                              |
+| Database           | SQLite                                              |
 
 ### Why Groq is the default LLM provider
 
@@ -230,7 +230,8 @@ re-enabled per task via the environment variables below.
 Create a `.env` file:
 
 ```env
-# Required
+# Required — the only API key needed with the default configuration
+# (SUMMARY_PROVIDER=groq, INSIGHTS_PROVIDER=groq).
 
 GROQ_API_KEY=
 
@@ -252,7 +253,8 @@ SARVAM_STT_MODEL=saaras:v2.5
 SUMMARY_PROVIDER=groq
 INSIGHTS_PROVIDER=groq
 
-# Required only if SUMMARY_PROVIDER or INSIGHTS_PROVIDER is set to "gemini"
+# Required ONLY if SUMMARY_PROVIDER or INSIGHTS_PROVIDER is set to "gemini".
+# Not needed for the default Groq configuration.
 GOOGLE_API_KEY=your_google_api_key
 GEMINI_MODEL=gemini-flash-latest
 ```
