@@ -82,7 +82,7 @@ def _invoke_chain(chain, chain_input, step_name: str):
 
 def _batch_chain(chain, batch_input: list, step_name: str) -> list:
     try:
-        return chain.batch(batch_input, config={"max_concurrency": 2})
+        return chain.batch(batch_input, config={"max_concurrency": 1})
     except APIError as exc:
         # See _invoke_chain above for why APIError (not APIStatusError) is
         # the correct base class to catch here.

@@ -49,24 +49,6 @@ def download_audio_from_youtube(url: str) -> str:
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
-
-            # Diagnostics for the prepare_filename() mismatch: these are
-            # cheap to log unconditionally (one call per download) and are
-            # the fastest way to see which field actually holds the real
-            # output path if this ever regresses again.
-            logger.info("yt-dlp info.keys(): %s", list(info.keys()))
-            logger.info("yt-dlp prepare_filename(info): %s", ydl.prepare_filename(info))
-            logger.info("yt-dlp info.get('filepath'): %s", info.get("filepath"))
-            logger.info(
-                "yt-dlp info.get('requested_downloads'): %s",
-                info.get("requested_downloads"),
-            )
-            logger.info(
-                "yt-dlp info.get('requested_formats'): %s",
-                info.get("requested_formats"),
-            )
-            logger.info("downloads dir contents: %s", os.listdir(DOWNLOAD_DIR))
-
             return _resolve_downloaded_filepath(ydl, info)
 
     except Exception:
