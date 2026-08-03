@@ -544,7 +544,20 @@ def _logout():
     into whichever session (same user re-logging-in, or a different user
     on the same browser tab) comes next.
     """
-    logger.info("User logged out.")
+    result = st.session_state.get("result")
+
+    if result:
+        collection_name = result.get("collection_name")
+
+        if collection_name:
+            try:
+                delete_collection(collection_name)
+                logger.info(
+                    "Deleted Chroma collection during logout: %s",
+                    collection_name,
+                )
+            except Exception:
+                logger.exception("Failed to delete Chroma collection during logout.")
 
     for key in list(st.session_state.keys()):
         del st.session_state[key]
