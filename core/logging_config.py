@@ -1,13 +1,14 @@
 """Centralized logging configuration for the AI Meeting Assistant.
 
-Call configure_logging() once, as early as possible in each entry point
-(CLI and Streamlit), before importing any project modules that log at
-import time. Individual modules just do:
+Call configure_logging() once during application startup before importing
+project modules that emit log messages.
+
+Individual modules simply create a module-level logger:
 
     import logging
     logger = logging.getLogger(__name__)
 
-and rely on the root configuration installed here.
+and rely on the root logging configuration installed here.
 """
 
 import logging
@@ -17,10 +18,10 @@ _CONFIGURED = False
 
 
 def configure_logging() -> None:
-    """Install a single console handler + format for the whole app.
+    """Configure the application's root logger.
 
-    Idempotent: safe to call multiple times (e.g. on every Streamlit
-    rerun) — only configures handlers once per process.
+    Safe to call multiple times. The configuration is applied only once
+    per process, making it suitable for Streamlit reruns.
     """
     global _CONFIGURED
     if _CONFIGURED:
