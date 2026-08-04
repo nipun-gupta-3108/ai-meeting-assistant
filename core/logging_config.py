@@ -1,7 +1,7 @@
 """Centralized logging configuration for the AI Meeting Assistant.
 
 Call configure_logging() once during application startup before importing
-project modules that emit log messages.
+project modules that use logging.
 
 Individual modules simply create a module-level logger:
 
