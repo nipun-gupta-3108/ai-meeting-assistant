@@ -35,6 +35,10 @@ https://github.com/user-attachments/...
 ### 🎧 Audio & Video Upload
 
 - Upload local **audio/video recordings** (`mp3`, `mp4`, `wav`, `m4a`, `webm`, `mov`, `aac`)
+- **Maximum upload size**: **150 MB** (configured in `.streamlit/config.toml` and validated at the application level to protect server resources)
+- **Audio recommended for faster uploads**: Audio-only recordings (such as MP3, M4A, WAV, AAC) are recommended for significantly faster upload times because they are much smaller than video files for the same duration.
+- **Video support**: Video recordings (MP4, WebM, MOV) are fully supported. Keep in mind that large video files take longer to transfer from your browser to the server before the application can process them.
+- *Note on transfer speeds*: The 150 MB limit prevents memory exhaustion and container crashes on deployment platforms like Streamlit Cloud; it does not change your network bandwidth, so using audio files remains the best way to speed up the initial upload.
 
 ### 📝 Automatic Audio Processing
 
@@ -269,7 +273,7 @@ streamlit run streamlit_app.py
 Workflow:
 
 1. Sign up or log in
-2. Upload an audio or video recording
+2. Upload an audio or video recording (up to 150 MB; audio recommended for faster uploads)
 3. Choose language
 4. Analyze the meeting
 5. Review summary and insights

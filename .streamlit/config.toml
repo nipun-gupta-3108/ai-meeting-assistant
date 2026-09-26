@@ -2,7 +2,7 @@
 toolbarMode = "minimal"
 
 [server]
-maxUploadSize = 512
+maxUploadSize = 150
 
 [theme]
 base = "dark"

@@ -53,6 +53,76 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 STYLE_PATH = Path(__file__).parent / "assets" / "style.css"
 
+# Maximum upload size for production deployments (e.g. Streamlit Cloud).
+# 150 MB protects server memory and ephemeral storage while allowing
+# hours of voice audio or reasonable-length video recordings.
+MAX_UPLOAD_SIZE_MB = 150
+MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024
+
+SUPPORTED_EXTENSIONS = ["mp3", "mp4", "wav", "m4a", "webm", "mov", "aac"]
+
+
+def validate_uploaded_file(
+    uploaded_file,
+    max_size_mb: int = MAX_UPLOAD_SIZE_MB,
+    allowed_extensions: list = SUPPORTED_EXTENSIONS,
+) -> tuple[bool, str]:
+    """Validate an uploaded recording's presence, extension, and file size.
+
+    Returns (is_valid, error_message). When is_valid is False, error_message
+    contains a user-friendly explanation safe for direct display. Never raises
+    or exposes internal stack traces.
+    """
+    if uploaded_file is None:
+        return False, "Upload an audio or video file before running analysis."
+
+    name = getattr(uploaded_file, "name", "")
+    extension = Path(name).suffix.lower().lstrip(".")
+    if allowed_extensions and extension not in allowed_extensions:
+        formatted_allowed = ", ".join(ext.upper() for ext in allowed_extensions)
+        return (
+            False,
+            f"Unsupported file format (.{extension}). Supported formats: {formatted_allowed}.",
+        )
+
+    # Determine file size safely without forcing unnecessary buffering
+    size = getattr(uploaded_file, "size", None)
+    if size is None:
+        try:
+            buf = uploaded_file.getbuffer()
+            size = len(buf)
+        except Exception:
+            try:
+                pos = uploaded_file.tell()
+                uploaded_file.seek(0, 2)
+                size = uploaded_file.tell()
+                uploaded_file.seek(pos)
+            except Exception:
+                size = None
+
+    if size is None:
+        return (
+            False,
+            "Could not determine the file size. Please check the file and try again.",
+        )
+
+    if size <= 0:
+        return (
+            False,
+            "The uploaded file is empty (0 bytes). Please upload a valid recording.",
+        )
+
+    max_bytes = max_size_mb * 1024 * 1024
+    if size > max_bytes:
+        size_mb = size / (1024 * 1024)
+        return (
+            False,
+            f"File size ({size_mb:.1f} MB) exceeds the {max_size_mb} MB limit. "
+            "Please upload a smaller file or an audio-only version for faster processing.",
+        )
+
+    return True, ""
+
 # Empty-state copy shown when a section's list comes back empty (either the
 # meeting genuinely had nothing to report, or JSON parsing fell back to an
 # empty list). Display-only — matches the wording the LLM used to produce
@@ -188,10 +258,14 @@ def format_history_timestamp(raw_created_at: str) -> str:
 
 
 def save_uploaded_file(uploaded_file) -> str:
-    extension = Path(uploaded_file.name).suffix
+    extension = Path(uploaded_file.name).suffix.lower()
     filename = f"{uuid.uuid4().hex}{extension}"
     file_path = UPLOAD_DIR / filename
-    file_path.write_bytes(uploaded_file.getbuffer())
+    try:
+        file_path.write_bytes(uploaded_file.getbuffer())
+    except Exception:
+        file_path.unlink(missing_ok=True)
+        raise
     return str(file_path)
 
 
@@ -721,9 +795,24 @@ def render_landing():
 
     with st.container(border=True):
         uploaded_file = st.file_uploader(
-            "Upload an audio or video recording to analyze it.",
-            type=["mp3", "mp4", "wav", "m4a", "webm", "mov", "aac"],
+            f"Upload an audio or video recording to analyze it (max {MAX_UPLOAD_SIZE_MB} MB).",
+            type=SUPPORTED_EXTENSIONS,
+            help=(
+                f"Maximum file size is {MAX_UPLOAD_SIZE_MB} MB. "
+                "Audio files are recommended for faster uploads. "
+                "Video files are supported, but large video files may take longer to upload and process."
+            ),
         )
+
+        st.caption(
+            "Audio files are recommended for faster uploads. Video files are supported, "
+            "but large video files may take longer to upload and process."
+        )
+
+        if uploaded_file is not None:
+            is_valid, validation_error = validate_uploaded_file(uploaded_file)
+            if not is_valid:
+                render_alert(validation_error, kind="error")
 
         lang_col, _spacer_col = st.columns(2)
         with lang_col:
@@ -738,7 +827,7 @@ def render_landing():
         )
 
     st.markdown(
-        '<p class="landing-footnote">Supports MP3, MP4, WAV, M4A, WebM, MOV, AAC</p>',
+        f'<p class="landing-footnote">Supports MP3, MP4, WAV, M4A, WebM, MOV, AAC (up to {MAX_UPLOAD_SIZE_MB} MB) • Audio recommended for faster uploads</p>',
         unsafe_allow_html=True,
     )
 
@@ -752,6 +841,11 @@ def render_landing():
                 "Upload an audio or video file before running analysis.",
                 kind="info",
             )
+            return
+
+        is_valid, validation_error = validate_uploaded_file(uploaded_file)
+        if not is_valid:
+            render_alert(validation_error, kind="error")
             return
 
         resolved_source = save_uploaded_file(uploaded_file)
