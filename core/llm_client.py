@@ -7,9 +7,15 @@ from langchain_groq import ChatGroq
 # Default model configuration
 # ---------------------------------------------------------------------------
 
-GROQ_DEFAULT_MODEL = os.getenv(
-    "GROQ_MODEL",
-    "llama-3.3-70b-versatile",
+GROQ_DEFAULT_MODEL = (
+    os.getenv("GROQ_MODEL")
+    or os.getenv("LLM_MODEL")
+    or "openai/gpt-oss-120b"
+)
+
+GROQ_SMALL_MODEL = os.getenv(
+    "GROQ_SMALL_MODEL",
+    "openai/gpt-oss-20b",
 )
 
 GEMINI_DEFAULT_MODEL = os.getenv(
@@ -139,3 +145,60 @@ class LLMServiceError(Exception):
     (Groq or Gemini) is currently configured — callers (e.g.
     streamlit_app.py's render_processing) only need to display str(exc).
     """
+
+
+def get_groq_error_message(exc: Exception) -> str:
+    """Return a safe, user-facing error message for Groq API errors
+    without exposing API keys or secrets.
+    """
+    status_code = getattr(exc, "status_code", None)
+    exc_str = str(exc).lower()
+
+    # 404: Model not found or retired
+    if (
+        status_code == 404
+        or "model_not_found" in exc_str
+        or "does not exist" in exc_str
+    ):
+        return (
+            "The configured Groq model is not available or has been retired. "
+            "Please check GROQ_MODEL in your environment settings."
+        )
+
+    # 401 / 403: Authentication or permission errors
+    if (
+        status_code in (401, 403)
+        or "invalid_api_key" in exc_str
+        or "unauthorized" in exc_str
+        or "permission" in exc_str
+    ):
+        return (
+            "Groq authentication failed. Please verify your GROQ_API_KEY "
+            "in your environment settings."
+        )
+
+    # 429: Rate limit
+    if status_code == 429 or "rate_limit" in exc_str or "rate limit" in exc_str:
+        return (
+            "The AI service is temporarily busy. Please wait a minute and "
+            "try again."
+        )
+
+    # 5xx / Network / Connection / Timeout errors
+    if (
+        (status_code is not None and status_code >= 500)
+        or "connection" in exc_str
+        or "timeout" in exc_str
+        or "network" in exc_str
+    ):
+        return (
+            "The AI service encountered a temporary network or server error. "
+            "Please wait a moment and try again."
+        )
+
+    # Fallback for any other Groq API errors
+    return (
+        "The AI service is temporarily busy. Please wait a minute and "
+        "try again."
+    )
+

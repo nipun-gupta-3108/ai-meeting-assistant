@@ -5,7 +5,11 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from google.genai.errors import ServerError
 from groq import APIError
 from langchain_google_genai.chat_models import ChatGoogleGenerativeAIError
-from core.llm_client import LLMServiceError, create_insights_llm
+from core.llm_client import (
+    LLMServiceError,
+    create_insights_llm,
+    get_groq_error_message,
+)
 import json
 import logging
 
@@ -66,9 +70,7 @@ def _invoke_chain(chain, chain_input, step_name: str):
         # covers rate limits, other 4xx/5xx status errors, and connection/
         # timeout errors alike, none of which are APIStatusError subclasses.
         logger.exception("Groq API error during %s.", step_name)
-        raise LLMServiceError(
-            "The AI service is temporarily busy. Please wait a minute and " "try again."
-        ) from exc
+        raise LLMServiceError(get_groq_error_message(exc)) from exc
     except (ChatGoogleGenerativeAIError, ServerError) as exc:
         # ChatGoogleGenerativeAI wraps the google-genai SDK's ClientError
         # (4xx, including 429 rate limits) into ChatGoogleGenerativeAIError,
@@ -87,9 +89,7 @@ def _batch_chain(chain, batch_input: list, step_name: str) -> list:
         # See _invoke_chain above for why APIError (not APIStatusError) is
         # the correct base class to catch here.
         logger.exception("Groq API error during %s.", step_name)
-        raise LLMServiceError(
-            "The AI service is temporarily busy. Please wait a minute and " "try again."
-        ) from exc
+        raise LLMServiceError(get_groq_error_message(exc)) from exc
     except (ChatGoogleGenerativeAIError, ServerError) as exc:
         # See _invoke_chain above for why both exception types are needed.
         logger.exception("Gemini API error during %s.", step_name)

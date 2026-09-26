@@ -2,7 +2,7 @@ import uuid
 import logging
 
 logger = logging.getLogger(__name__)
-from groq import RateLimitError
+from groq import APIError, RateLimitError
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
@@ -15,7 +15,12 @@ from core.transcript_vector_store import (
     build_transcript_vector_store,
     create_transcript_retriever,
 )
-from core.llm_client import create_llm
+from core.llm_client import (
+    GROQ_DEFAULT_MODEL,
+    GROQ_SMALL_MODEL,
+    create_llm,
+    get_groq_error_message,
+)
 
 # Bounded conversational window: how many past chat messages (user +
 # assistant turns combined) are converted into LangChain messages and fed
@@ -120,12 +125,12 @@ def build_transcript_rag_chain(transcript: str, collection_name: str):
     retriever = create_transcript_retriever(vector_store, k=12)
 
     small_llm = create_llm(
-        model="llama-3.1-8b-instant",
+        model=GROQ_SMALL_MODEL,
         temperature=0,
     )
 
     big_llm = create_llm(
-        model="llama-3.3-70b-versatile",
+        model=GROQ_DEFAULT_MODEL,
         temperature=0,
     )
 
@@ -328,15 +333,12 @@ def ask_transcript_question(
             }
         )
 
-    except RateLimitError:
+    except APIError as exc:
 
-        logger.warning("Groq rate limit reached while answering transcript question.")
+        logger.exception("Groq API error while answering transcript question.")
 
         return {
-            "answer": (
-                "⚠️ The AI service is temporarily busy.\n\n"
-                "Please wait a minute and try again."
-            ),
+            "answer": f"⚠️ {get_groq_error_message(exc)}",
             "sources": [],
         }
 
@@ -352,7 +354,7 @@ def ask_transcript_question(
                 "sources": [],
             }
 
-        if "connection" in msg or "network" in msg or "api" in msg:
+        if "connection" in msg or "network" in msg:
             return {
                 "answer": (
                     "⚠️ Unable to connect to the AI service.\n\n"

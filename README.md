@@ -205,7 +205,7 @@ Title   Summary  Insights
 | Frontend           | Streamlit                                           |
 | Audio Processing   | FFmpeg, pydub                                       |
 | Speech Recognition | Faster-Whisper, Sarvam AI                           |
-| LLM                | Groq (Llama 3.3 70B), with optional Gemini fallback |
+| LLM                | Groq (OpenAI GPT-OSS 120B), with optional Gemini fallback |
 | AI Framework       | LangChain (LCEL)                                    |
 | Vector Database    | ChromaDB                                            |
 | Embeddings         | BAAI/bge-base-en-v1.5                               |
@@ -242,7 +242,7 @@ SARVAM_API_KEY=
 
 WHISPER_MODEL=small
 
-LLM_MODEL=llama-3.3-70b-versatile
+GROQ_MODEL=openai/gpt-oss-120b
 
 SARVAM_STT_MODEL=saaras:v2.5
 
