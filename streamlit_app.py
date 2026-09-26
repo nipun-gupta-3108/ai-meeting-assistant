@@ -35,14 +35,22 @@ from core.meeting_repository import (
     list_meetings,
     save_meeting,
 )
-from core.pipeline import run_meeting_assistant_pipeline
+from core.pipeline import (
+    run_meeting_assistant_pipeline,
+    InvalidMediaError,
+    EmptyTranscriptError,
+)
+from core.llm_client import LLMServiceError
 from core.transcript_qa import (
     ask_transcript_question,
     ensure_rag_chain,
     format_sources_line,
 )
 from core.transcript_vector_store import delete_collection, cleanup_stale_collections
-from utils.audio_preparation import cleanup_stale_temp_files
+from utils.audio_preparation import (
+    cleanup_stale_temp_files,
+    validate_media_file,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -853,6 +861,16 @@ def render_landing():
         # once the pipeline is done with it — see _cleanup_uploaded_temp_file.
         st.session_state.uploaded_temp_path = resolved_source
 
+        # Media validity pre-check: verify recording is readable audio/video
+        try:
+            validate_media_file(resolved_source)
+        except InvalidMediaError as exc:
+            logger.warning("Uploaded file failed media validation: %s", exc)
+            st.session_state.error_message = str(exc)
+            _cleanup_uploaded_temp_file()
+            st.rerun()
+            return
+
         st.session_state.pending_source = resolved_source
         st.session_state.pending_language = (
             "hinglish" if language_label == "Hinglish / Hindi" else "english"
@@ -904,6 +922,28 @@ def render_processing():
                     st.session_state.pending_source,
                     st.session_state.pending_language,
                 )
+            except (InvalidMediaError, EmptyTranscriptError) as exc:
+                logger.warning(
+                    "Meeting analysis stopped: %s (source=%s)",
+                    exc,
+                    st.session_state.pending_source,
+                )
+                st.session_state.processing = False
+                st.session_state.error_message = str(exc)
+                _cleanup_uploaded_temp_file()
+                st.rerun()
+                return
+            except LLMServiceError as exc:
+                logger.warning(
+                    "LLM service error for source=%s: %s",
+                    st.session_state.pending_source,
+                    exc,
+                )
+                st.session_state.processing = False
+                st.session_state.error_message = str(exc)
+                _cleanup_uploaded_temp_file()
+                st.rerun()
+                return
             except Exception as exc:
                 # Full stack trace goes to the log; the user only sees a
                 # short, actionable message in the UI.

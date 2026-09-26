@@ -50,6 +50,51 @@ class TestLandingAppTest(unittest.TestCase):
             "Expected footnote with 150 MB and audio recommendation not found in markdown",
         )
 
+    def test_landing_displays_invalid_media_error_alert(self):
+        at = AppTest.from_file("streamlit_app.py", default_timeout=60)
+        at.session_state["current_user"] = {
+            "id": "test-user-id",
+            "name": "Production Tester",
+            "email": "tester@example.com",
+        }
+        at.session_state["error_message"] = (
+            "The uploaded file could not be read as valid audio/video. Please upload a valid recording."
+        )
+        at.run()
+
+        self.assertEqual(len(at.exception), 0, "No exceptions when rendering error")
+        markdown_texts = [m.value for m in at.markdown]
+        self.assertTrue(
+            any(
+                "The uploaded file could not be read as valid audio/video" in text
+                for text in markdown_texts
+            ),
+            "Expected invalid media error alert not found in rendered markdown",
+        )
+
+    def test_landing_displays_empty_transcript_error_alert(self):
+        at = AppTest.from_file("streamlit_app.py", default_timeout=60)
+        at.session_state["current_user"] = {
+            "id": "test-user-id",
+            "name": "Production Tester",
+            "email": "tester@example.com",
+        }
+        at.session_state["error_message"] = (
+            "No speech was detected in the recording. Please upload a recording containing spoken audio."
+        )
+        at.run()
+
+        self.assertEqual(len(at.exception), 0, "No exceptions when rendering error")
+        markdown_texts = [m.value for m in at.markdown]
+        self.assertTrue(
+            any(
+                "No speech was detected in the recording" in text
+                for text in markdown_texts
+            ),
+            "Expected empty transcript error alert not found in rendered markdown",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -29,6 +29,125 @@ DEFAULT_STALE_TEMP_FILE_MAX_AGE_HOURS = float(
 )
 
 
+# User-facing error messages
+INVALID_MEDIA_MESSAGE = (
+    "The uploaded file could not be read as valid audio/video. "
+    "Please upload a valid recording."
+)
+
+EMPTY_TRANSCRIPT_MESSAGE = (
+    "No speech was detected in the recording. "
+    "Please upload a recording containing spoken audio."
+)
+
+
+class InvalidMediaError(Exception):
+    """Raised when an uploaded media file cannot be read or decoded as valid audio/video."""
+
+    def __init__(self, message: str = INVALID_MEDIA_MESSAGE):
+        super().__init__(message)
+
+
+class EmptyTranscriptError(Exception):
+    """Raised when no speech is detected in the audio recording."""
+
+    def __init__(self, message: str = EMPTY_TRANSCRIPT_MESSAGE):
+        super().__init__(message)
+
+
+def validate_media_file(file_path: str) -> None:
+    """Validate that the given path is a readable media file containing audio.
+
+    Raises InvalidMediaError if the file does not exist, is empty, is corrupt,
+    or does not contain a decodable audio stream.
+    """
+    if not file_path or not os.path.isfile(file_path):
+        raise InvalidMediaError(INVALID_MEDIA_MESSAGE)
+
+    try:
+        if os.path.getsize(file_path) <= 0:
+            raise InvalidMediaError(INVALID_MEDIA_MESSAGE)
+    except OSError as exc:
+        logger.warning("Could not check size of %s: %s", file_path, exc)
+        raise InvalidMediaError(INVALID_MEDIA_MESSAGE) from exc
+
+    # Check for audio stream using ffprobe (preferred) or ffmpeg
+    ffprobe_bin = shutil.which("ffprobe")
+    if ffprobe_bin:
+        probe_cmd = [
+            ffprobe_bin,
+            "-v",
+            "error",
+            "-select_streams",
+            "a",
+            "-show_entries",
+            "stream=codec_type",
+            "-of",
+            "csv=p=0",
+            file_path,
+        ]
+        try:
+            probe_res = subprocess.run(
+                probe_cmd,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if probe_res.returncode != 0 or "audio" not in probe_res.stdout.lower():
+                logger.warning(
+                    "FFprobe media validation failed for %s: returncode=%d stderr=%s stdout=%s",
+                    file_path,
+                    probe_res.returncode,
+                    probe_res.stderr.strip(),
+                    probe_res.stdout.strip(),
+                )
+                raise InvalidMediaError(INVALID_MEDIA_MESSAGE)
+            return
+        except InvalidMediaError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "FFprobe probe encountered error for %s: %s; falling back to FFmpeg",
+                file_path,
+                exc,
+            )
+
+    # Fallback to FFmpeg decode test
+    cmd = [
+        ffmpeg_path,
+        "-v",
+        "error",
+        "-i",
+        file_path,
+        "-vn",
+        "-t",
+        "1",
+        "-f",
+        "null",
+        "-",
+    ]
+    try:
+        res = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res.returncode != 0:
+            logger.warning(
+                "FFmpeg media check failed for %s: returncode=%d stderr=%s",
+                file_path,
+                res.returncode,
+                res.stderr.strip(),
+            )
+            raise InvalidMediaError(INVALID_MEDIA_MESSAGE)
+    except InvalidMediaError:
+        raise
+    except Exception as exc:
+        logger.error("FFmpeg execution error for %s: %s", file_path, exc)
+        raise InvalidMediaError(INVALID_MEDIA_MESSAGE) from exc
+
+
 def convert_media_to_wav(input_path: str) -> str:
     output_path = os.path.splitext(input_path)[0] + "_converted.wav"
 
@@ -58,13 +177,30 @@ def convert_media_to_wav(input_path: str) -> str:
             input_path,
             result.stderr,
         )
-        raise RuntimeError("FFmpeg conversion failed.")
+        raise InvalidMediaError(INVALID_MEDIA_MESSAGE)
+
+    if not os.path.isfile(output_path) or os.path.getsize(output_path) <= 44:
+        logger.error(
+            "FFmpeg conversion produced empty or missing WAV file for %s",
+            input_path,
+        )
+        _remove_file_if_exists(output_path)
+        raise InvalidMediaError(INVALID_MEDIA_MESSAGE)
 
     return output_path
 
 
 def split_audio_into_chunks(wav_path: str, chunk_minutes: int = 10) -> list:
-    audio = AudioSegment.from_wav(wav_path)
+    try:
+        audio = AudioSegment.from_wav(wav_path)
+    except Exception as exc:
+        logger.error("Failed to parse WAV file %s: %s", wav_path, exc)
+        raise InvalidMediaError(INVALID_MEDIA_MESSAGE) from exc
+
+    if len(audio) == 0:
+        logger.warning("Converted audio from %s has zero length", wav_path)
+        raise InvalidMediaError(INVALID_MEDIA_MESSAGE)
+
     chunk_ms = chunk_minutes * 60 * 1000
 
     chunks = []
@@ -223,6 +359,9 @@ def cleanup_stale_temp_files(
 def prepare_audio_chunks(source: str) -> list:
     # The original local-file `source` path is NOT touched here because
     # it may be a user-owned file.
+    logger.info("Validating media file: %s", source)
+    validate_media_file(source)
+
     logger.info("Converting local file to WAV...")
 
     wav_path = convert_media_to_wav(source)
@@ -237,6 +376,10 @@ def prepare_audio_chunks(source: str) -> list:
         # Once split_audio_into_chunks has run (or failed), it is no longer
         # needed because the chunks themselves are separate files.
         _remove_file_if_exists(wav_path)
+
+    if not chunks:
+        logger.warning("No audio chunks produced for %s", source)
+        raise InvalidMediaError(INVALID_MEDIA_MESSAGE)
 
     logger.info(
         "Audio ready — %d chunk(s) created.",

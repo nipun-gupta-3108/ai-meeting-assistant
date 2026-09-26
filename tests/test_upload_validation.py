@@ -15,6 +15,7 @@ from utils.audio_preparation import (
     convert_media_to_wav,
     prepare_audio_chunks,
     split_audio_into_chunks,
+    validate_media_file,
 )
 
 
@@ -135,6 +136,7 @@ class TestUploadValidation(unittest.TestCase):
         self.assertTrue(callable(cleanup_chunk_files))
         self.assertTrue(callable(cleanup_stale_temp_files))
         self.assertTrue(callable(prepare_audio_chunks))
+        self.assertTrue(callable(validate_media_file))
 
 
 if __name__ == "__main__":

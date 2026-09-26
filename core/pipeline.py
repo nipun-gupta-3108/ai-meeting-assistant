@@ -1,7 +1,14 @@
 import logging
 import uuid
 
-from utils.audio_preparation import prepare_audio_chunks, cleanup_chunk_files
+from utils.audio_preparation import (
+    prepare_audio_chunks,
+    cleanup_chunk_files,
+    InvalidMediaError,
+    EmptyTranscriptError,
+    INVALID_MEDIA_MESSAGE,
+    EMPTY_TRANSCRIPT_MESSAGE,
+)
 from core.audio_transcription import transcribe_audio_chunks
 from core.transcript_summary import summarize_transcript, generate_meeting_title
 from core.transcript_insights import (
@@ -25,6 +32,14 @@ def run_meeting_assistant_pipeline(source: str, language: str = "english") -> di
         # of how later pipeline stages (summary, insights, vector store)
         # turn out.
         cleanup_chunk_files(chunks)
+
+    if not transcript or not transcript.strip():
+        logger.warning(
+            "No speech detected in transcription for source=%s (language=%s)",
+            source,
+            language,
+        )
+        raise EmptyTranscriptError(EMPTY_TRANSCRIPT_MESSAGE)
 
     summary = summarize_transcript(transcript)
 
