@@ -4,7 +4,6 @@ import shutil
 import subprocess
 import time
 
-import yt_dlp
 from pydub import AudioSegment
 
 logger = logging.getLogger(__name__)
@@ -18,9 +17,6 @@ if ffmpeg_path is None:
 
 FFMPEG_DIR = os.path.dirname(ffmpeg_path)
 
-DOWNLOAD_DIR = "downloads"
-os.makedirs(DOWNLOAD_DIR, exist_ok=True)
-
 logger.debug("Using FFmpeg from: %s", FFMPEG_DIR)
 
 # How old a leftover file in a managed temp directory must be before the
@@ -31,67 +27,6 @@ logger.debug("Using FFmpeg from: %s", FFMPEG_DIR)
 DEFAULT_STALE_TEMP_FILE_MAX_AGE_HOURS = float(
     os.getenv("STALE_TEMP_FILE_MAX_AGE_HOURS", "24")
 )
-
-
-def download_audio_from_youtube(url: str) -> str:
-    output_path = os.path.join(DOWNLOAD_DIR, "%(id)s_%(title).80s.%(ext)s")
-
-    ydl_opts = {
-        "format": "bestaudio/best",
-        "outtmpl": output_path,
-        "noplaylist": True,
-        "quiet": False,
-        "geo_bypass": True,
-        "retries": 10,
-        "fragment_retries": 10,
-    }
-
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            return _resolve_downloaded_filepath(ydl, info)
-
-    except Exception:
-        logger.exception("YouTube download failed")
-        raise
-
-
-def _resolve_downloaded_filepath(ydl: "yt_dlp.YoutubeDL", info: dict) -> str:
-    """Return the file yt-dlp actually wrote to disk, not a guess.
-
-    ydl.prepare_filename(info) re-derives a path from the outtmpl template;
-    it can diverge from the real output file whenever yt-dlp's internal
-    postprocessing (merging, remuxing, extension resolution) changes the
-    final filename after the template would have predicted it. yt-dlp
-    records the true, final path(s) in info["requested_downloads"] once
-    the download completes, so that is checked first. info["filepath"]
-    (newer yt-dlp) and prepare_filename() are kept only as fallbacks for
-    older yt-dlp versions or unusual info shapes.
-
-    Raises RuntimeError (never returns a nonexistent path) if none of the
-    candidates actually exist on disk, so a mismatch fails loudly here
-    instead of surfacing later as an opaque FFmpeg "No such file" error.
-    """
-    requested_downloads = info.get("requested_downloads") or []
-    if requested_downloads:
-        candidate = requested_downloads[0].get("filepath")
-        if candidate and os.path.exists(candidate):
-            return candidate
-
-    candidate = info.get("filepath")
-    if candidate and os.path.exists(candidate):
-        return candidate
-
-    candidate = ydl.prepare_filename(info)
-    if os.path.exists(candidate):
-        return candidate
-
-    raise RuntimeError(
-        "yt-dlp reported a successful download but no output file could be "
-        "located (checked requested_downloads, info['filepath'], and "
-        f"prepare_filename()). Downloads dir contents: "
-        f"{os.listdir(DOWNLOAD_DIR)!r}"
-    )
 
 
 def convert_media_to_wav(input_path: str) -> str:
@@ -204,17 +139,13 @@ def cleanup_stale_temp_files(
 
     SAFETY SCOPE — read before pointing this at a new directory:
 
-    This is only safe to call on DOWNLOAD_DIR ("downloads/") and the
-    Streamlit app's own upload directory ("uploads/").
+    This is only safe to call on the Streamlit app's own upload directory
+    ("uploads/").
 
-    Nothing else in this codebase ever writes into those two directories,
-    and every file that can exist there is one this app generated itself:
-
-      - downloads/: the raw YouTube download, its `_converted.wav`, and its
-        `_chunk_N.wav` pieces.
-
-      - uploads/: the UUID-named copy Streamlit saves on upload, plus its
-        own `_converted.wav` and `_chunk_N.wav` pieces.
+    Nothing else in this codebase ever writes into that directory, and
+    every file that can exist there is one this app generated itself:
+    the UUID-named copy Streamlit saves on upload, plus its own
+    `_converted.wav` and `_chunk_N.wav` pieces.
 
     Because directory scoping guarantees that everything here belongs to
     the application, no filename pattern matching is required.
@@ -222,8 +153,8 @@ def cleanup_stale_temp_files(
     This function must NEVER be pointed at a directory that can also contain
     user-owned files.
 
-    For example, the CLI can accept an arbitrary local-file input path.
-    Its converted WAV/chunks may be written next to the user's own file,
+    For example, if a caller passes an arbitrary local-file input path,
+    its converted WAV/chunks may be written next to the user's own file,
     so that directory cannot safely be swept.
 
     Only regular files are removed. Subdirectories are never recursively
@@ -290,30 +221,11 @@ def cleanup_stale_temp_files(
 
 
 def prepare_audio_chunks(source: str) -> list:
-    downloaded_path = None
+    # The original local-file `source` path is NOT touched here because
+    # it may be a user-owned file.
+    logger.info("Converting local file to WAV...")
 
-    try:
-        if source.startswith("http://") or source.startswith("https://"):
-            logger.info("Detected YouTube URL. Downloading audio...")
-
-            downloaded_path = download_audio_from_youtube(source)
-
-            wav_path = convert_media_to_wav(downloaded_path)
-
-        else:
-            logger.info("Detected local file. Converting to WAV...")
-
-            wav_path = convert_media_to_wav(source)
-
-    finally:
-        # The raw YouTube download is only an intermediate for conversion.
-        # Once convert_media_to_wav has run (or failed), it is no longer
-        # needed.
-        #
-        # The original local-file `source` path is NOT touched here because
-        # it may be a user-owned file.
-        if downloaded_path:
-            _remove_file_if_exists(downloaded_path)
+    wav_path = convert_media_to_wav(source)
 
     logger.info("Chunking audio...")
 

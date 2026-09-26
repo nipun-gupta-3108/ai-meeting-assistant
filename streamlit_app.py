@@ -42,10 +42,7 @@ from core.transcript_qa import (
     format_sources_line,
 )
 from core.transcript_vector_store import delete_collection, cleanup_stale_collections
-from utils.audio_preparation import (
-    DOWNLOAD_DIR,
-    cleanup_stale_temp_files,
-)
+from utils.audio_preparation import cleanup_stale_temp_files
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +81,7 @@ _CREATED_AT_DISPLAY_FORMAT = "%b %d, %Y %I:%M %p"
 
 # Feature chips shown under the hero. Each name maps directly to a capability
 # that is actually implemented (see README) — nothing here is aspirational.
-FEATURE_CHIPS = ["Audio", "Video", "YouTube", "AI Summary", "Chat"]
+FEATURE_CHIPS = ["Audio", "Video", "AI Summary", "Chat"]
 
 # Small, self-contained Lucide-style icons used across the app (landing
 # history rows, empty states, chat citations). Kept as raw SVG strings
@@ -228,7 +225,6 @@ def initialize_state():
         "pending_source": None,
         "pending_language": "english",
         "error_message": None,
-        "input_mode": "YouTube URL",
         "uploaded_temp_path": None,
     }
     for key, value in defaults.items():
@@ -724,48 +720,10 @@ def render_landing():
         render_alert(st.session_state.error_message, kind="error")
 
     with st.container(border=True):
-        toggle_col_a, toggle_col_b = st.columns(2)
-        with toggle_col_a:
-            if st.button(
-                "YouTube URL",
-                type=(
-                    "primary"
-                    if st.session_state.input_mode == "YouTube URL"
-                    else "secondary"
-                ),
-                use_container_width=True,
-                key="select_mode_url",
-            ):
-                st.session_state.input_mode = "YouTube URL"
-                st.rerun()
-        with toggle_col_b:
-            if st.button(
-                "Upload file",
-                type=(
-                    "primary"
-                    if st.session_state.input_mode == "Upload file"
-                    else "secondary"
-                ),
-                use_container_width=True,
-                key="select_mode_upload",
-            ):
-                st.session_state.input_mode = "Upload file"
-                st.rerun()
-
-        source = ""
-        uploaded_file = None
-        if st.session_state.input_mode == "YouTube URL":
-            source = st.text_input(
-                "YouTube URL",
-                placeholder="https://www.youtube.com/watch?v=...",
-                label_visibility="collapsed",
-            )
-        else:
-            uploaded_file = st.file_uploader(
-                "Upload audio or video",
-                type=["mp3", "mp4", "wav", "m4a", "webm", "mov", "aac"],
-                label_visibility="collapsed",
-            )
+        uploaded_file = st.file_uploader(
+            "Upload an audio or video recording to analyze it.",
+            type=["mp3", "mp4", "wav", "m4a", "webm", "mov", "aac"],
+        )
 
         lang_col, _spacer_col = st.columns(2)
         with lang_col:
@@ -780,7 +738,7 @@ def render_landing():
         )
 
     st.markdown(
-        '<p class="landing-footnote">Supports YouTube, MP3, MP4, WAV, M4A</p>',
+        '<p class="landing-footnote">Supports MP3, MP4, WAV, M4A, WebM, MOV, AAC</p>',
         unsafe_allow_html=True,
     )
 
@@ -788,28 +746,18 @@ def render_landing():
 
     if run_clicked:
         st.session_state.error_message = None
-        input_mode = st.session_state.input_mode
 
-        if input_mode == "Upload file":
-            if uploaded_file is None:
-                render_alert(
-                    "Upload an audio or video file before running analysis.",
-                    kind="info",
-                )
-                return
-            resolved_source = save_uploaded_file(uploaded_file)
-            # Track this as our own temp artifact so it can be cleaned up
-            # once the pipeline is done with it — see _cleanup_uploaded_temp_file.
-            st.session_state.uploaded_temp_path = resolved_source
-        elif not source.strip():
+        if uploaded_file is None:
             render_alert(
-                "Enter a YouTube URL before running analysis.",
+                "Upload an audio or video file before running analysis.",
                 kind="info",
             )
             return
-        else:
-            resolved_source = source.strip()
-            st.session_state.uploaded_temp_path = None
+
+        resolved_source = save_uploaded_file(uploaded_file)
+        # Track this as our own temp artifact so it can be cleaned up
+        # once the pipeline is done with it — see _cleanup_uploaded_temp_file.
+        st.session_state.uploaded_temp_path = resolved_source
 
         st.session_state.pending_source = resolved_source
         st.session_state.pending_language = (
@@ -817,8 +765,7 @@ def render_landing():
         )
 
         logger.info(
-            "Starting analysis (mode=%s, language=%s).",
-            input_mode,
+            "Starting analysis (language=%s).",
             st.session_state.pending_language,
         )
 
@@ -831,8 +778,8 @@ def render_landing():
 def _cleanup_uploaded_temp_file():
     """Remove the app's own temp copy of an uploaded file once the
     pipeline is done with it (success or failure). Only ever targets a
-    path this app created via save_uploaded_file — never a YouTube URL,
-    and never a path the user typed directly."""
+    path this app created via save_uploaded_file — never a user-owned
+    file path."""
     temp_path = st.session_state.get("uploaded_temp_path")
     if not temp_path:
         return
@@ -1112,16 +1059,14 @@ def _cleanup_stale_artifacts_once():
     Chroma collections and filesystem temp artifacts use conservative
     age-based cleanup so active sessions are not affected.
 
-    Only app-owned directories are swept:
-    - downloads/ contains files created by the YouTube processing path.
-    - uploads/ contains UUID-named copies created by save_uploaded_file().
+    Only the app-owned uploads/ directory (containing UUID-named copies
+    created by save_uploaded_file()) is swept.
 
     Never point cleanup_stale_temp_files() at arbitrary user directories.
     """
 
     cleanup_stale_collections()
 
-    cleanup_stale_temp_files(DOWNLOAD_DIR)
     cleanup_stale_temp_files(str(UPLOAD_DIR))
 
     return True

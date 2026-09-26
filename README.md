@@ -32,10 +32,9 @@ https://github.com/user-attachments/...
 
 ## ✨ Features
 
-### 🎧 Flexible Input
+### 🎧 Audio & Video Upload
 
-- Process a **YouTube URL**
-- Upload a local **audio/video file**
+- Upload local **audio/video recordings** (`mp3`, `mp4`, `wav`, `m4a`, `webm`, `mov`, `aac`)
 
 ### 📝 Automatic Audio Processing
 
@@ -99,7 +98,7 @@ Download:
 # 🔄 Pipeline Flow
 
 ```
-YouTube URL / Audio File
+Uploaded Audio / Video File
           │
           ▼
  Audio Preparation
@@ -133,14 +132,14 @@ Title   Summary  Insights
 
 ```text
                  ┌──────────────────────┐
-                 │  YouTube URL /       │
-                 │  Local audio-video   │
+                 │  Uploaded local      │
+                 │  audio / video file  │
                  └──────────┬───────────┘
                             │
                             ▼
                  ┌──────────────────────┐
                  │  Audio Preparation   │
-                 │  (yt-dlp / pydub)    │
+                 │  (FFmpeg / pydub)    │
                  │  → mono 16kHz WAV    │
                  │  → chunked segments  │
                  └──────────┬───────────┘
@@ -204,7 +203,7 @@ Title   Summary  Insights
 | Layer              | Technology                                          |
 | ------------------ | --------------------------------------------------- |
 | Frontend           | Streamlit                                           |
-| Audio Processing   | yt-dlp, FFmpeg, pydub                               |
+| Audio Processing   | FFmpeg, pydub                                       |
 | Speech Recognition | Faster-Whisper, Sarvam AI                           |
 | LLM                | Groq (Llama 3.3 70B), with optional Gemini fallback |
 | AI Framework       | LangChain (LCEL)                                    |
@@ -270,7 +269,7 @@ streamlit run streamlit_app.py
 Workflow:
 
 1. Sign up or log in
-2. Select YouTube URL or File Upload
+2. Upload an audio or video recording
 3. Choose language
 4. Analyze the meeting
 5. Review summary and insights
